@@ -140,6 +140,8 @@ export function PanelImpuesto({
     method: "TRANSFERENCIA",
     reference: "",
   });
+  // El pago se registra con el mismo botón del pie, solo si se tilda: no se paga por apretar «Guardar».
+  const [conPago, setConPago] = useState(false);
   const detalle = detalleGuardado(posicion.saldosFavorDetalle);
 
   const presentada = Boolean(posicion.filingId);
@@ -194,106 +196,124 @@ export function PanelImpuesto({
                 ? null
                 : "Adjuntá la declaración jurada.";
 
-  const etiquetaGuardar = !presentada
+  const pagoVisible = aPagar && canPay && presentada;
+  const motivoPago = !pago.amount ? "Indicá el importe del pago." : null;
+  // Sin permiso de presentación, el pago es lo único que se puede guardar: no hace falta tildarlo.
+  const incluyePago = pagoVisible && (conPago || !canFile);
+  const documentosListos = canFile && motivo === null;
+  const pagoListo = incluyePago && motivoPago === null;
+  // Un solo botón al pie: guarda lo que esté completo (presentación, declaración jurada y, si se tilda, el pago).
+  const puedeGuardar = (documentosListos || pagoListo) && !(incluyePago && motivoPago !== null);
+
+  const etiquetaDocumentos = !presentada
     ? djCompleta
       ? "Guardar presentación y declaración jurada"
       : "Registrar presentación"
     : conDj
       ? "Guardar corrección"
       : "Guardar declaración jurada";
+  const etiquetaGuardar = incluyePago
+    ? documentosListos
+      ? `${etiquetaDocumentos} y pago`
+      : "Registrar pago"
+    : etiquetaDocumentos;
 
   const invalidar = () => queryClient.invalidateQueries({ queryKey: ["tax-position", firmId, clientId] });
 
   const guardarMutation = useMutation({
     mutationFn: async () => {
-      let filingId = posicion.filingId ?? null;
-      if (presentacionLista) {
-        // La constancia es obligatoria: se elige una ya subida o se sube en este mismo paso.
-        let evidenceDocumentId = presentacion.evidenceDocumentId;
-        if (!evidenceDocumentId && acuse) {
-          evidenceDocumentId = await uploadFilingReceipt(base, acuse);
-          setPresentacion((f) => ({ ...f, evidenceDocumentId }));
-          setAcuse(null);
-          await queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] });
-          await waitForReceiptReady(base, evidenceDocumentId);
+      let warnings: TaxFilingDeclarationWarning[] = [];
+      let guardoDj = false;
+      if (documentosListos) {
+        let filingId = posicion.filingId ?? null;
+        if (presentacionLista) {
+          // La constancia es obligatoria: se elige una ya subida o se sube en este mismo paso.
+          let evidenceDocumentId = presentacion.evidenceDocumentId;
+          if (!evidenceDocumentId && acuse) {
+            evidenceDocumentId = await uploadFilingReceipt(base, acuse);
+            setPresentacion((f) => ({ ...f, evidenceDocumentId }));
+            setAcuse(null);
+            await queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] });
+            await waitForReceiptReady(base, evidenceDocumentId);
+          }
+          const creada = await api.post<{ id: string }>(
+            `${base}/tax-obligations/${posicion.obligationId}/filings`,
+            {
+              settlementId: posicion.settlement?.id,
+              filedAt: presentacion.filedAt,
+              amountFiled: presentacion.amountFiled,
+              ...(presentacion.externalId.trim() ? { externalId: presentacion.externalId.trim() } : {}),
+              evidenceDocumentId,
+            },
+          );
+          filingId = creada.id;
+          // Si la declaración jurada se guarda en el mismo paso, un solo aviso: dos apilados tapan el pie del cajón.
+          if (!djLista) notify.success("Presentación registrada con su acuse.");
+          await invalidar();
         }
-        const creada = await api.post<{ id: string }>(
-          `${base}/tax-obligations/${posicion.obligationId}/filings`,
-          {
-            settlementId: posicion.settlement?.id,
-            filedAt: presentacion.filedAt,
-            amountFiled: presentacion.amountFiled,
-            ...(presentacion.externalId.trim() ? { externalId: presentacion.externalId.trim() } : {}),
-            evidenceDocumentId,
-          },
-        );
-        filingId = creada.id;
-        // Si la declaración jurada se guarda en el mismo paso, un solo aviso: dos apilados tapan el pie del cajón.
-        if (!djLista) notify.success("Presentación registrada con su acuse.");
-        await invalidar();
+        if (djLista && filingId) {
+          let declarationDocumentId = dj.documentId;
+          // Si el guardado falla después de subir el archivo, el reintento usa ese mismo documento.
+          if (!declarationDocumentId && archivoDj) {
+            declarationDocumentId = await uploadPresentacionDocument(
+              base,
+              archivoDj,
+              FILING_DECLARATION_DOCUMENT_CATEGORY,
+            );
+            setDj((f) => ({ ...f, documentId: declarationDocumentId }));
+            setArchivoDj(null);
+            await queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] });
+            await waitForReceiptReady(base, declarationDocumentId, { mensajes: MENSAJES_DJ });
+          }
+          const respuesta = await api.patch<{ warnings: TaxFilingDeclarationWarning[] }>(
+            `${base}/tax-obligations/${posicion.obligationId}/filings/${filingId}/declaration`,
+            {
+              declarationDocumentId,
+              impuestoDeterminado: dj.impuestoDeterminado,
+              saldoFavorTecnico: dj.saldoFavorTecnico,
+              saldoLibreDisponibilidad: dj.saldoLibreDisponibilidad,
+              totalAPagar: dj.totalAPagar,
+              ...(detalle.length > 0 ? { saldosFavorDetalle: detalle } : {}),
+            },
+          );
+          warnings = respuesta.warnings;
+          guardoDj = true;
+        }
       }
-      if (!djLista || !filingId) return { warnings: [] as TaxFilingDeclarationWarning[], dj: false };
-      let declarationDocumentId = dj.documentId;
-      // Si el guardado falla después de subir el archivo, el reintento usa ese mismo documento.
-      if (!declarationDocumentId && archivoDj) {
-        declarationDocumentId = await uploadPresentacionDocument(
-          base,
-          archivoDj,
-          FILING_DECLARATION_DOCUMENT_CATEGORY,
-        );
-        setDj((f) => ({ ...f, documentId: declarationDocumentId }));
-        setArchivoDj(null);
-        await queryClient.invalidateQueries({ queryKey: ["documents", firmId, clientId] });
-        await waitForReceiptReady(base, declarationDocumentId, { mensajes: MENSAJES_DJ });
+      let registroPago = false;
+      if (pagoListo) {
+        await api.post(`${base}/tax-obligations/${posicion.obligationId}/payments`, {
+          ...(posicion.settlement ? { settlementId: posicion.settlement.id } : {}),
+          paidAt: pago.paidAt,
+          amount: pago.amount,
+          method: pago.method,
+          ...(pago.reference.trim() ? { reference: pago.reference.trim() } : {}),
+        });
+        registroPago = true;
       }
-      const { warnings } = await api.patch<{ warnings: TaxFilingDeclarationWarning[] }>(
-        `${base}/tax-obligations/${posicion.obligationId}/filings/${filingId}/declaration`,
-        {
-          declarationDocumentId,
-          impuestoDeterminado: dj.impuestoDeterminado,
-          saldoFavorTecnico: dj.saldoFavorTecnico,
-          saldoLibreDisponibilidad: dj.saldoLibreDisponibilidad,
-          totalAPagar: dj.totalAPagar,
-          ...(detalle.length > 0 ? { saldosFavorDetalle: detalle } : {}),
-        },
-      );
-      return { warnings, dj: true };
+      return { warnings, dj: guardoDj, pago: registroPago };
     },
-    onSuccess: ({ warnings, dj: guardoDj }) => {
+    onSuccess: ({ warnings, dj: guardoDj, pago: registroPago }) => {
       void invalidar();
-      if (!guardoDj) return;
-      // Las diferencias informan y no bloquean (D5B-5): se leen sin cerrar el cajón.
-      setAdvertencias(warnings.length > 0 ? warnings : null);
-      if (warnings.length === 0) {
-        notify.success(
-          presentacionLista
-            ? "Presentación y declaración jurada guardadas."
-            : conDj
-              ? "Declaración jurada corregida."
-              : "Declaración jurada cargada.",
-        );
-        if (!aPagar || !canPay) onCerrar();
+      if (!guardoDj && !registroPago) return;
+      if (guardoDj) {
+        // Las diferencias informan y no bloquean (D5B-5): se leen sin cerrar el cajón.
+        setAdvertencias(warnings.length > 0 ? warnings : null);
+        if (warnings.length === 0 && !registroPago) {
+          notify.success(
+            presentacionLista
+              ? "Presentación y declaración jurada guardadas."
+              : conDj
+                ? "Declaración jurada corregida."
+                : "Declaración jurada cargada.",
+          );
+        }
       }
+      if (registroPago) notify.success("Pago registrado.");
+      if (warnings.length === 0 && (registroPago || !aPagar || !canPay)) onCerrar();
     },
     onError: () => void invalidar(),
   });
-
-  const pagoMutation = useMutation({
-    mutationFn: () =>
-      api.post(`${base}/tax-obligations/${posicion.obligationId}/payments`, {
-        ...(posicion.settlement ? { settlementId: posicion.settlement.id } : {}),
-        paidAt: pago.paidAt,
-        amount: pago.amount,
-        method: pago.method,
-        ...(pago.reference.trim() ? { reference: pago.reference.trim() } : {}),
-      }),
-    onSuccess: () => {
-      notify.success("Pago registrado.");
-      void invalidar();
-      onCerrar();
-    },
-  });
-  const motivoPago = !pago.amount ? "Indicá el importe del pago." : null;
 
   // Diferencia con el cálculo: se marca el campo y se dice cuánto era.
   const difiere = (campo: CampoDj) =>
@@ -318,19 +338,19 @@ export function PanelImpuesto({
       footer={
         <ActionDrawerFooter
           primary={
-            canFile ? (
+            canFile || pagoVisible ? (
               <Button
                 type="submit"
                 form="legajo-cajon-impuesto"
                 loading={guardarMutation.isPending}
                 loadingLabel="Subiendo y validando"
-                disabled={motivo !== null}
+                disabled={!puedeGuardar}
               >
                 {etiquetaGuardar}
               </Button>
             ) : null
           }
-          hint={canFile ? motivo : null}
+          hint={puedeGuardar ? null : incluyePago && motivoPago ? motivoPago : canFile ? motivo : null}
           onCancel={onCerrar}
           cancelLabel="Cerrar"
         />
@@ -341,7 +361,7 @@ export function PanelImpuesto({
         className="study-form study-form--presentacion legajo-cajon-impuesto"
         onSubmit={(event) => {
           event.preventDefault();
-          if (motivo === null) guardarMutation.mutate();
+          if (puedeGuardar) guardarMutation.mutate();
         }}
       >
         <section className="legajo-cajon-impuesto__seccion study-form__full" aria-label="Presentación (acuse)">
@@ -502,81 +522,73 @@ export function PanelImpuesto({
           ) : null}
         </section>
         <WorkpaperActionError error={guardarMutation.error} />
-      </form>
-
-      <section className="legajo-cajon-impuesto__seccion" aria-label="Pago">
-        <h3>Pago</h3>
-        {pagado && !aPagar ? (
-          <p role="status">Pagado {formatMoney(posicion.paid)}.</p>
-        ) : !aPagar ? (
-          <p role="status">No requiere pago: el saldo es cero o a favor.</p>
-        ) : !canPay ? (
-          <p>Tu perfil no tiene permiso para registrar el pago.</p>
-        ) : !presentada ? (
-          <p role="status">Falta registrar la presentación para poder registrar el pago.</p>
-        ) : (
-          <form
-            id="legajo-pago"
-            className="study-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (motivoPago === null) pagoMutation.mutate();
-            }}
-          >
-            <p className="muted-copy study-form__full">
-              Pendiente: {formatMoney(posicion.pending)}
-              {pagado ? ` · pagado ${formatMoney(posicion.paid)}` : ""}
-            </p>
-            <MoneyField
-              label="Importe"
-              id="tax-payment-amount"
-              value={pago.amount}
-              onChange={(value) => setPago({ ...pago, amount: value })}
-              required
-            />
-            <CampoFecha
-              label="Fecha de pago"
-              id="tax-payment-date"
-              value={pago.paidAt}
-              onChange={(event) => setPago({ ...pago, paidAt: event.target.value })}
-              required
-            />
-            <div className="ds-field">
-              <label className="ds-field__label" htmlFor="tax-payment-method">
-                Medio
-              </label>
-              <SearchSelect
-                id="tax-payment-method"
-                label="Medio"
-                hideLabel
-                className="ds-field__input"
-                value={pago.method}
-                onChange={(value) => setPago({ ...pago, method: value })}
-                allowEmpty={false}
-                options={[
-                  { value: "TRANSFERENCIA", label: "Transferencia" },
-                  { value: "VEP", label: "VEP" },
-                  { value: "EFECTIVO", label: "Efectivo" },
-                  { value: "OTRO", label: "Otro" },
-                ]}
+        <section className="legajo-cajon-impuesto__seccion study-form__full" aria-label="Pago">
+          <h3>Pago</h3>
+          {pagado && !aPagar ? (
+            <p role="status">Pagado {formatMoney(posicion.paid)}.</p>
+          ) : !aPagar ? (
+            <p role="status">No requiere pago: el saldo es cero o a favor.</p>
+          ) : !canPay ? (
+            <p>Tu perfil no tiene permiso para registrar el pago.</p>
+          ) : !presentada ? (
+            <p role="status">Falta registrar la presentación para poder registrar el pago.</p>
+          ) : (
+            <div className="study-form study-form--presentacion">
+              <p className="muted-copy study-form__full">
+                Pendiente: {formatMoney(posicion.pending)}
+                {pagado ? ` · pagado ${formatMoney(posicion.paid)}` : ""}
+              </p>
+              {canFile ? (
+                <label className="study-form__full legajo-cajon-impuesto__con-pago">
+                  <input type="checkbox" checked={conPago} onChange={(event) => setConPago(event.target.checked)} />
+                  <span>Registrar también el pago al guardar</span>
+                </label>
+              ) : null}
+              <MoneyField
+                label="Importe"
+                id="tax-payment-amount"
+                value={pago.amount}
+                onChange={(value) => setPago({ ...pago, amount: value })}
+                required={incluyePago}
+              />
+              <CampoFecha
+                label="Fecha de pago"
+                id="tax-payment-date"
+                value={pago.paidAt}
+                onChange={(event) => setPago({ ...pago, paidAt: event.target.value })}
+                required={incluyePago}
+              />
+              <div className="ds-field">
+                <label className="ds-field__label" htmlFor="tax-payment-method">
+                  Medio
+                </label>
+                <SearchSelect
+                  id="tax-payment-method"
+                  label="Medio"
+                  hideLabel
+                  className="ds-field__input"
+                  value={pago.method}
+                  onChange={(value) => setPago({ ...pago, method: value })}
+                  allowEmpty={false}
+                  options={[
+                    { value: "TRANSFERENCIA", label: "Transferencia" },
+                    { value: "VEP", label: "VEP" },
+                    { value: "EFECTIVO", label: "Efectivo" },
+                    { value: "OTRO", label: "Otro" },
+                  ]}
+                />
+              </div>
+              <Field
+                label="Referencia (opcional)"
+                id="tax-payment-reference"
+                value={pago.reference}
+                onChange={(event) => setPago({ ...pago, reference: event.target.value })}
               />
             </div>
-            <Field
-              label="Referencia (opcional)"
-              id="tax-payment-reference"
-              value={pago.reference}
-              onChange={(event) => setPago({ ...pago, reference: event.target.value })}
-            />
-            <WorkpaperActionError error={pagoMutation.error} />
-            <div className="study-form__full legajo-cajon-impuesto__pago">
-              {motivoPago ? <p className="muted-copy" role="note">{motivoPago}</p> : null}
-              <Button type="submit" variant="secondary" loading={pagoMutation.isPending} disabled={motivoPago !== null}>
-                Registrar pago
-              </Button>
-            </div>
-          </form>
-        )}
-      </section>
+          )}
+        </section>
+      </form>
+
     </ActionDrawer>
   );
 }

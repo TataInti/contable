@@ -148,6 +148,16 @@ function preparar(posicion: object = posicionDemo) {
 }
 
 const pagoDe = (dialogo: HTMLElement) => within(dialogo).getByRole("region", { name: "Pago" });
+// Un solo botón al pie: el pago se incluye tildando «Registrar también el pago al guardar» (sin permiso de presentación va solo).
+const pieDe = (dialogo: HTMLElement) => within(dialogo.querySelector<HTMLElement>(".action-drawer__footer")!);
+function tildarPago(dialogo: HTMLElement) {
+  const tilde = within(dialogo).queryByLabelText("Registrar también el pago al guardar");
+  if (tilde) fireEvent.click(tilde);
+}
+function registrarPago(dialogo: HTMLElement) {
+  tildarPago(dialogo);
+  fireEvent.click(pieDe(dialogo).getByRole("button", { name: "Registrar pago" }));
+}
 const presentacionDe = (dialogo: HTMLElement) =>
   within(dialogo).getByRole("region", { name: "Presentación (acuse)" });
 
@@ -182,7 +192,7 @@ describe("Legajo · registrar pago (K7)", () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirCajon();
-    fireEvent.click(within(pagoDe(dialogo)).getByRole("button", { name: "Registrar pago" }));
+    registrarPago(dialogo);
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(`${BASE}/tax-obligations/${OBLIGACION}/payments`, {
         settlementId: LIQUIDACION,
@@ -201,7 +211,7 @@ describe("Legajo · registrar pago (K7)", () => {
     renderLegajo();
     const dialogo = await abrirCajon();
     cambiarValor(within(dialogo).getByLabelText("Referencia (opcional)"), "Transferencia Demo 001");
-    fireEvent.click(within(pagoDe(dialogo)).getByRole("button", { name: "Registrar pago" }));
+    registrarPago(dialogo);
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(
         `${BASE}/tax-obligations/${OBLIGACION}/payments`,
@@ -215,8 +225,20 @@ describe("Legajo · registrar pago (K7)", () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirCajon();
+    tildarPago(dialogo);
     cambiarValor(within(dialogo).getByLabelText("Importe"), "");
-    expect(within(pagoDe(dialogo)).getByRole("button", { name: "Registrar pago" })).toBeDisabled();
+    expect(pieDe(dialogo).getByRole("button", { name: "Registrar pago" })).toBeDisabled();
+  });
+
+  it("el pago no se registra si no se tilda: el pie guarda solo lo demás", async () => {
+    preparar(posicionPresentada);
+    fijarContexto(PERMISOS_COMPLETOS);
+    renderLegajo();
+    const dialogo = await abrirCajon();
+    expect(within(dialogo).getByLabelText("Registrar también el pago al guardar")).not.toBeChecked();
+    expect(pieDe(dialogo).queryByRole("button", { name: "Registrar pago" })).toBeNull();
+    expect(dialogo.querySelectorAll(".action-drawer__footer .ds-button--primary")).toHaveLength(1);
+    expect(api.post).not.toHaveBeenCalledWith(`${BASE}/tax-obligations/${OBLIGACION}/payments`, expect.anything());
   });
 
   it("un error de la acción se muestra dentro del cajón, que sigue abierto", async () => {
@@ -225,7 +247,7 @@ describe("Legajo · registrar pago (K7)", () => {
     fijarContexto(PERMISOS_COMPLETOS);
     renderLegajo();
     const dialogo = await abrirCajon();
-    fireEvent.click(within(pagoDe(dialogo)).getByRole("button", { name: "Registrar pago" }));
+    registrarPago(dialogo);
     expect(await within(dialogo).findByRole("alert")).toHaveTextContent(
       "El pago supera el total a pagar.",
     );
@@ -366,7 +388,7 @@ describe("Legajo · registrar presentación (K7)", () => {
     fijarContexto(PERMISOS_COMPLETOS.filter((permiso) => permiso !== "tax.filings.record"));
     renderLegajo();
     const dialogo = await abrirCajon();
-    expect(within(pagoDe(dialogo)).getByRole("button", { name: "Registrar pago" })).toBeEnabled();
+    expect(pieDe(dialogo).getByRole("button", { name: "Registrar pago" })).toBeEnabled();
     expect(within(dialogo).queryByRole("button", { name: "Registrar presentación" })).toBeNull();
   });
 
@@ -399,8 +421,9 @@ describe("Legajo · pago y presentación, accesibilidad mínima (Foco 2.2b)", ()
     renderLegajo();
     const dialogo = await abrirCajon();
     expect(dialogo.querySelectorAll(".ds-button--primary")).toHaveLength(1);
+    tildarPago(dialogo);
     cambiarValor(within(dialogo).getByLabelText("Importe"), "");
-    expect(within(pagoDe(dialogo)).getByRole("button", { name: "Registrar pago" })).toBeDisabled();
+    expect(pieDe(dialogo).getByRole("button", { name: "Registrar pago" })).toBeDisabled();
     expect(within(dialogo).getByText("Indicá el importe del pago.")).toBeInTheDocument();
   });
 

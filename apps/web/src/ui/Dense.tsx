@@ -92,7 +92,22 @@ export function DenseTabs<T extends string>({
               </span>
             ) : null}
           </Button>
-          {tab.status ? <span className="dense-tab__status">{tab.status}</span> : null}
+          {tab.status ? (
+            <span className="dense-tab__status">
+              {(() => {
+                // «! Con pendientes»: el símbolo queda separado del texto, que puede estilarse como el resto de la pestaña.
+                const partes = /^([!✓·])\s+(.+)$/.exec(tab.status);
+                return partes ? (
+                  <>
+                    {partes[1]}
+                    <span className="dense-tab__status-texto"> {partes[2]}</span>
+                  </>
+                ) : (
+                  tab.status
+                );
+              })()}
+            </span>
+          ) : null}
         </span>
       ))}
     </div>

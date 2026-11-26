@@ -1627,3 +1627,13 @@
   font-variant-numeric: tabular-nums;
 }
 .legajo-cajon-impuesto__resta strong { color: var(--ds-color-text); }
+.legajo-cajon-impuesto__con-pago { display: flex; align-items: center; gap: var(--ds-space-2); }
+
+/* Pestañas del legajo: el estado («! Con pendientes») usa el mismo tamaño que el nombre de la pestaña y lleva aire antes del texto. */
+.dense-tabs[aria-label="Etapas del legajo"] .dense-tab__status {
+  font-size: var(--ds-text-sm);
+  white-space: nowrap;
+}
+.dense-tabs[aria-label="Etapas del legajo"] .dense-tab__status-texto {
+  margin-inline-start: var(--ds-space-1);
+}
