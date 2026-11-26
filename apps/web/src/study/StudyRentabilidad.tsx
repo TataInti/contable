@@ -233,8 +233,10 @@ export function StudyRentabilidad() {
                   key={`${line.concept}-${index}`}
                 >
                   <div className="profitability-line__head">
-                    <strong>{line.concept}</strong>
-                    <span>{formatMoney(line.result)}</span>
+                    <strong>{line.concept.replaceAll("_", " ").toLowerCase()}</strong>
+                    {snapshot.totals && line.concept in snapshot.totals ? null : (
+                      <span>{formatMoney(line.result)}</span>
+                    )}
                   </div>
                   <p className="profitability-line__formula">{line.formula}</p>
                 </div>

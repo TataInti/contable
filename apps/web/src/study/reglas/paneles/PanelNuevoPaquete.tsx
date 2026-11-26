@@ -81,7 +81,7 @@ export function PanelNuevoPaquete({
           />
           <div className="ds-field">
             <label className="ds-field__label" htmlFor="new-rule-pack-regime">
-              Régimen
+              Régimen <span aria-hidden="true">*</span>
             </label>
             <SearchSelect
               id="new-rule-pack-regime"

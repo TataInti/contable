@@ -258,6 +258,11 @@
   color: var(--ds-color-text);
 }
 
+/* El anillo de foco queda dentro de la pestaña: el contenedor recorta lo que sobresale y dejaba una raya suelta. */
+.dense-tabs .dense-tab:focus-visible {
+  outline-offset: -2px;
+}
+
 .dense-tab[aria-selected="true"] {
   background: transparent;
   color: var(--ds-color-primary);

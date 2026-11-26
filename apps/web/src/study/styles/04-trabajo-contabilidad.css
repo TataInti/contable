@@ -264,3 +264,34 @@
   margin-right: auto;
   color: var(--ds-color-text-muted);
 }
+
+/* Sección vacía: una sola línea compacta («Sin pedidos abiertos · Crear pedido»). */
+.study-trabajo .work-columns .empty-line {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  min-height: 40px;
+  margin: 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+}
+
+.study-trabajo .work-columns .study-panel,
+.study-trabajo .work-columns .ds-table__wrapper {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Pedidos documentales: «Enviar pedido», «Subir» y «Revisar» ocupan siempre la misma ranura, alineadas a la derecha entre filas. */
+#work-requests-section .ds-table th:last-child,
+#work-requests-section .ds-table td:last-child {
+  width: 19rem;
+  min-width: 19rem;
+}
+.study-trabajo .table-actions--ranuras {
+  display: grid;
+  grid-template-columns: 7.5rem 4rem 5rem;
+  justify-content: end;
+  justify-items: end;
+  gap: var(--ds-space-1);
+}

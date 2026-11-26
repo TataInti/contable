@@ -839,10 +839,15 @@
   line-height: 1.3;
 }
 
-@media (max-width: 1280px) {
-  .dense-table[aria-label="Cartera de clientes"] .client-list__secondary-column {
-    display: none;
-  }
+/* 03-8: el contador que filtra se ve como botón (con borde), no como texto. */
+.dense-stats[aria-label="Resumen de la cartera"] .dense-stat.ds-button {
+  border: var(--ds-border-width) solid var(--ds-color-border);
+  margin-inline: 0;
+}
+
+/* 03-10: el ícono de lupa de los desplegables con búsqueda no tapa la primera letra dentro de un cajón. */
+.study-inline-form .ds-search-select__control > .ctxbar__input {
+  padding-inline-start: calc(var(--ds-space-3) + var(--ds-space-4) + var(--ds-space-2));
 }
 
 /* D3c: grilla de la ficha, menú de acciones y editor por secciones. */
@@ -1010,6 +1015,14 @@
 
 .client-contacts__anchor {
   scroll-margin-block: var(--ds-space-4);
+  /* Aire al final de la ficha para que el pie con los botones no tape el último bloque al desplazar. */
+  padding-block-end: var(--ds-space-4);
+}
+
+.client-list__status-column {
+  min-inline-size: 8.5rem;
+  overflow: visible;
+  padding-inline-end: var(--ds-space-3) !important;
 }
 
 @media (max-width: 1280px) {
@@ -1018,12 +1031,33 @@
     gap: var(--ds-space-4);
   }
 
-  .client-summary__index-select-control {
-    display: block;
+  /* Sin columna lateral: el índice pasa a ser una fila de enlaces de sección. */
+  .client-summary__section-index {
+    position: static;
+    padding: 0 0 var(--ds-space-3);
+    border-right: 0;
+    border-bottom: 1px solid var(--client-summary-line);
+  }
+
+  .client-summary__section-index .client-summary__index-group > p {
+    display: none;
   }
 
   .client-summary__section-index {
-    display: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ds-space-1) var(--ds-space-3);
+  }
+
+  .client-summary__index-group + .client-summary__index-group {
+    margin-top: 0;
+  }
+
+  /* Entre pestañas hay separación: cada enlace conserva su relleno y no se toca con el siguiente. */
+  .client-summary__index-group ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ds-space-1) var(--ds-space-3);
   }
 }
 
@@ -1058,4 +1092,76 @@
   text-overflow: clip;
   text-align: start;
   height: auto;
+}
+
+.client-summary__missing,
+.client-summary__periods-note {
+  margin: var(--ds-space-4) 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+}
+
+/* Próximo vencimiento: una línea bajo los indicadores, con el acceso al Legajo. */
+.client-summary__proximo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2) var(--ds-space-3);
+  margin: var(--ds-space-3) 0 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+}
+.client-summary__proximo strong {
+  color: var(--ds-color-text);
+}
+
+/* 03-13: «Comentarios» plegado en el inspector hasta que haya uno. */
+.client-inspector__comments > summary {
+  cursor: pointer;
+  padding: var(--ds-space-3) 0;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+/* 03-9: los campos obligatorios del alta llevan asterisco. */
+.client-create-form .ds-field:has(input[required]) > .ds-field__label::after {
+  content: " *";
+  color: var(--ds-color-danger);
+}
+
+/* Lista «Falta»: alineada a la izquierda y con las comas pegadas a cada dato. */
+.faltantes-lista {
+  display: block;
+  text-align: start;
+}
+
+.faltantes-lista .ds-button--row {
+  display: inline;
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding: 0;
+  border: 0;
+  text-align: start;
+  white-space: normal;
+  vertical-align: baseline;
+}
+
+/* Las etiquetas de la ficha («Nombre de fantasía») entran en una línea. */
+.dense-inspector .dense-facts > div {
+  grid-template-columns: 136px minmax(0, 1fr);
+}
+
+.dense-inspector .dense-facts dt {
+  white-space: nowrap;
+}
+
+/* Clientes: buscador más angosto para que «Agrupar por terminación» quede en la fila de filtros. */
+.dense-toolbar:has(select[aria-label="Filtrar por estado"]) .dense-search .dense-input {
+  width: 200px;
+}
+
+.client-list__gaps {
+  justify-content: flex-start;
+  padding-inline: 0;
 }

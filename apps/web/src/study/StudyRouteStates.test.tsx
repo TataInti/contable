@@ -80,7 +80,7 @@ describe("estados de rutas del estudio", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText("Esta sección todavía no está disponible")).toBeTruthy();
+    expect(screen.getByText("Sección no disponible")).toBeTruthy();
     expect(screen.queryByText("Contenido del asistente")).toBeNull();
   });
 

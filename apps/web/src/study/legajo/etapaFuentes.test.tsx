@@ -163,7 +163,7 @@ describe("Legajo · etapa Fuentes (K10)", () => {
   it("reconoce un TXT de percepciones y avisa si corresponde a otra fuente", async () => {
     const fuentes = [
       fuenteRetencionesDemo,
-      { ...fuenteRetencionesDemo, code: "IIBB_RPI_TUC", label: "Ingresos Brutos Tucumán", origin: "DGR_RPI_TUC" },
+      { ...fuenteRetencionesDemo, code: "IIBB_RPI_TUC", label: "Retenciones y percepciones IIBB Tucumán", origin: "DGR_RPI_TUC" },
     ];
     vi.mocked(api.get).mockImplementation(rutasDemo({ fuentes }) as never);
     fijarContexto(PERMISOS_FUENTES);
@@ -174,9 +174,9 @@ describe("Legajo · etapa Fuentes (K10)", () => {
       target: { files: [new File([LINEA_PERCEPCION_DEMO], "per20999999998_F611_011020260900.txt", { type: "text/plain" })] },
     });
     expect(await screen.findByText(/Es un archivo de percepciones sufridas/)).toBeInTheDocument();
-    expect(screen.getByText(/va en la fuente «Ingresos Brutos Tucumán»/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Cambiar a Ingresos Brutos Tucumán" }));
-    expect(screen.getByRole("dialog", { name: "Gestionar fuente" })).toHaveTextContent("Ingresos Brutos Tucumán");
+    expect(screen.getByText(/va en la fuente «Retenciones y percepciones IIBB Tucumán»/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cambiar a Retenciones y percepciones IIBB Tucumán" }));
+    expect(screen.getByRole("dialog", { name: "Gestionar fuente" })).toHaveTextContent("Retenciones y percepciones IIBB Tucumán");
   });
 
   it("abre Fuentes desde ?etapa=fuentes", async () => {

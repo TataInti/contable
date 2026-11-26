@@ -124,3 +124,8 @@ export const CONTROL_LABELS: Record<string, string> = {
   BANK_CREDIT_RECONCILIATION: "Acreditaciones bancarias vs. facturación",
   CASH_ALLOCATION_RECONCILIATION: "Caja e imputaciones del período",
 };
+
+// Qué revisar cuando el control no trae mensaje ni importes.
+export const CONTROL_CAUSAS: Record<string, string> = {
+  CASH_ALLOCATION_RECONCILIATION: "Hay movimientos de caja o imputaciones fiscales del período sin conciliar.",
+};
