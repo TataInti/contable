@@ -25,6 +25,8 @@ import {
   waitForReceiptReady,
 } from "../../filingReceipt";
 import { formatMoney } from "../formato";
+import { CampoFecha } from "../../fiscal/CampoFecha";
+import { CampoArchivo } from "./CampoArchivo";
 import type { EvidenceDocument, TaxPosition } from "../tipos";
 import { WorkpaperActionError } from "../WorkpaperActionError";
 
@@ -300,6 +302,12 @@ export function PanelImpuesto({
     ? `Difiere del cálculo: ${formatMoney(calculo.presentado)}`
     : undefined;
 
+  const percepciones = posicion.settlement?.totals?.PERCEPCIONES;
+  const resta =
+    percepciones !== undefined && Number(percepciones) !== 0
+      ? { determinado: calculo.impuestoDeterminado, percepciones: dosDecimales(percepciones), presentado: calculo.presentado }
+      : null;
+
   return (
     <ActionDrawer
       isOpen
@@ -338,6 +346,11 @@ export function PanelImpuesto({
       >
         <section className="legajo-cajon-impuesto__seccion study-form__full" aria-label="Presentación (acuse)">
           <h3>Presentación (acuse)</h3>
+          {resta ? (
+            <p className="legajo-cajon-impuesto__resta">
+              Determinado <strong>{formatMoney(resta.determinado)}</strong> − Percepciones <strong>{formatMoney(resta.percepciones)}</strong> = Presentado <strong>{formatMoney(resta.presentado)}</strong>
+            </p>
+          ) : null}
           {presentada ? (
             <p role="status">
               Presentada el {formatearFecha(posicion.filedAt, "sin fecha")} · acuse cargado.
@@ -354,10 +367,9 @@ export function PanelImpuesto({
                 hint={difierePresentado}
                 required
               />
-              <Field
+              <CampoFecha
                 label="Fecha de presentación"
                 id="tax-filing-date"
-                type="date"
                 value={presentacion.filedAt}
                 onChange={(event) => setPresentacion({ ...presentacion, filedAt: event.target.value })}
                 required
@@ -384,10 +396,10 @@ export function PanelImpuesto({
               ) : null}
               {!presentacion.evidenceDocumentId ? (
                 <div className="study-form__full">
-                  <Field
+                  <CampoArchivo
                     label="Archivo del acuse"
                     id="tax-filing-receipt"
-                    type="file"
+                    archivo={acuse}
                     accept={RECEIPT_ACCEPT}
                     hint="PDF o imagen: el comprobante que emite el organismo."
                     required
@@ -464,10 +476,10 @@ export function PanelImpuesto({
                       {declaraciones.length === 0 ? (
                         <p className="muted-copy">Todavía no hay declaraciones juradas subidas para este cliente.</p>
                       ) : null}
-                      <Field
+                      <CampoArchivo
                         label="Archivo de la declaración jurada"
                         id="dj-archivo"
-                        type="file"
+                        archivo={archivoDj}
                         accept={RECEIPT_ACCEPT}
                         hint="PDF o imagen. No se lee con IA: los importes son los de arriba."
                         onChange={(event) => setArchivoDj(event.target.files?.[0] ?? null)}
@@ -522,10 +534,9 @@ export function PanelImpuesto({
               onChange={(value) => setPago({ ...pago, amount: value })}
               required
             />
-            <Field
+            <CampoFecha
               label="Fecha de pago"
               id="tax-payment-date"
-              type="date"
               value={pago.paidAt}
               onChange={(event) => setPago({ ...pago, paidAt: event.target.value })}
               required

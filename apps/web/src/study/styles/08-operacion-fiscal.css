@@ -1468,8 +1468,9 @@
   margin: 0;
   color: var(--ds-color-text-muted);
   font-size: var(--ds-text-sm);
-  white-space: nowrap;
 }
+.workpaper-close-summary > span { display: block; }
+.workpaper-close-summary__cifras { margin-top: var(--ds-space-1); font-variant-numeric: tabular-nums; }
 .workpaper-close-summary strong {
   color: var(--ds-color-text);
 }
@@ -1523,12 +1524,14 @@
 .workpaper-close-step__title small {
   color: var(--ds-color-text-muted);
 }
-.workpaper-close-step__status { justify-self: start; }
-.workpaper-close-step__status--hecho::before { content: "✓"; }
+.workpaper-close-step__status { justify-self: start; text-align: left; }
+.workpaper-close-step__status--hecho::before { content: "✓ "; }
 .workpaper-close-step__action p { margin: 0; color: var(--ds-color-text-muted); font-size: var(--ds-text-sm); }
 .workpaper-close-step__action {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
+  text-align: left;
   gap: var(--ds-space-2);
 }
 
@@ -1575,3 +1578,50 @@
   html body:has(.action-drawer__panel) .ds-toast-region { inset-inline-end: calc(560px + var(--ds-space-4)); }
   html body:has(.action-drawer__panel--wide) .ds-toast-region { inset-inline-end: calc(680px + var(--ds-space-4)); }
 }
+
+/* Control de archivo del Cierre: texto en español (el nativo muestra «Choose File»). */
+.campo-archivo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  min-block-size: 2.5rem;
+  padding: 0 var(--ds-space-2);
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-color-surface, var(--ds-color-background));
+}
+.campo-archivo__input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+.campo-archivo:focus-within {
+  outline: 2px solid var(--ds-color-focus);
+  outline-offset: 2px;
+}
+.campo-archivo__boton {
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid var(--ds-color-border-strong);
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-color-text);
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.campo-archivo__nombre {
+  min-inline-size: 0;
+  overflow: hidden;
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.legajo-cajon-impuesto__resta {
+  margin: 0 0 var(--ds-space-2);
+  color: var(--ds-color-text-muted);
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.legajo-cajon-impuesto__resta strong { color: var(--ds-color-text); }

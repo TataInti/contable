@@ -67,14 +67,17 @@ export function EtapaCierre({
     <li className="workpaper-close-step" key={n}>
       <span className="workpaper-close-step__number">{n}</span>
       <div className="workpaper-close-step__title"><strong>{titulo}</strong><small>{descripcion}</small></div>
-      <span className={`workpaper-close-step__status${hecho ? " workpaper-close-step__status--hecho" : ""}`} role="status">{hecho ? <span className="sr-only">Hecho</span> : disponible ? "Disponible" : "Bloqueado"}</span>
+      <span className={`workpaper-close-step__status${hecho ? " workpaper-close-step__status--hecho" : ""}`} role="status">{hecho ? "Hecho" : disponible ? "Disponible" : "Bloqueado"}</span>
       <div className="workpaper-close-step__action">{accion}</div>
     </li>
   );
 
   return (
     <div className="workpaper-stage">
-      <p className="workpaper-close-summary"><strong>{periodLabel}</strong> · {positions.map((position) => position.regime.taxType.name).filter((name, index, all) => all.indexOf(name) === index).join(" / ") || "Impuestos sin posición"} · Total determinado {formatMoney(totalDeterminado.toFixed(2))} · Pagado {formatMoney(totalPagado.toFixed(2))} · Saldo {formatMoney(saldoPendiente.toFixed(2))} · Vence {formatearFecha(vence, "sin fecha cargada")} · {pasosHechos} de 4 pasos</p>
+      <p className="workpaper-close-summary">
+        <span><strong>{periodLabel}</strong> · {positions.map((position) => position.regime.taxType.name).filter((name, index, all) => all.indexOf(name) === index).join(" / ") || "Impuestos sin posición"} · Vence {formatearFecha(vence, "sin fecha cargada")} · {pasosHechos} de 4 pasos</span>
+        <span className="workpaper-close-summary__cifras">Total determinado {formatMoney(totalDeterminado.toFixed(2))} · Pagado {formatMoney(totalPagado.toFixed(2))} · Saldo {formatMoney(saldoPendiente.toFixed(2))}</span>
+      </p>
       <ol className="workpaper-close-checklist" aria-label="Pasos para cerrar el período">
         {paso(1, "Finalizar", "Cierra la liquidación y deja los saldos para el mes siguiente.", finalized, readyToFinalize && canFinalize && !readOnly,
           readyToFinalize ? readOnly ? null : <>{control("Finalizar", canFinalize, onFinalize)}{canFinalize ? null : <p>Tu perfil no tiene permiso para finalizar este legajo.</p>}</> :
@@ -89,7 +92,7 @@ export function EtapaCierre({
       </ol>
       {finalized && positions.length > 0 ? (
         <section aria-label="Impuestos del mes" className="workpaper-close-taxes">
-          <h3>Un cajón por impuesto</h3>
+          <h3>Impuestos del mes</h3>
           <ul className="workpaper-close-taxes__list">
             {positions.map((position) => {
               const presentada = Boolean(position.filingId);
