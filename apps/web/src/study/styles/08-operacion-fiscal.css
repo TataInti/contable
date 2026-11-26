@@ -1572,3 +1572,18 @@
 .legajo-cajon-impuesto__seccion > p { margin: 0; }
 .legajo-cajon-impuesto__pago { display: flex; align-items: center; justify-content: flex-end; gap: var(--ds-space-3); }
 .legajo-cajon-impuesto__pago p { margin: 0; }
+
+/* Encabezado de cada impuesto en Determinación: nombre y estado en una sola línea, con aire entre los dos. */
+.workpaper-calculation__column-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+  max-width: 100%;
+  white-space: nowrap;
+}
+.workpaper-calculation__column-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

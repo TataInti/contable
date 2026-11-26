@@ -181,7 +181,7 @@ export function EtapaCalculo({
                 { key: "concept", header: "Concepto", render: (row) => row.label === "Total a ingresar" ? <strong>{row.label}</strong> : row.label },
                 ...determinacion.map((component) => ({
                   key: component.obligationId,
-                  header: <span className="workpaper-calculation__column-title">{etiquetaDe(component.obligationId)}<small><StatusBadge status={component.settlement?.status ?? "PENDING"} /></small></span>,
+                  header: <span className="workpaper-calculation__column-title"><span className="workpaper-calculation__column-name" title={etiquetaDe(component.obligationId)}>{etiquetaDe(component.obligationId).replace(/^Tributo Económico Municipal \(TEM\)/, "TEM")}</span><small><StatusBadge status={component.settlement?.status ?? "PENDING"} /></small></span>,
                   align: "right" as const,
                   render: (row: (typeof filasDeterminacion)[number]) => {
                     const amount = row.amounts[component.obligationId];
