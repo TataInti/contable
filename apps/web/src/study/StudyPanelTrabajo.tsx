@@ -497,7 +497,7 @@ export function StudyPanelTrabajo() {
               allowEmpty={false}
               options={[
                 { value: RESPONSABLE_MIS, label: "Responsable: Mis obligaciones" },
-                { value: RESPONSABLE_TODOS, label: "Responsable: Todo el estudio" },
+                { value: RESPONSABLE_TODOS, label: "Responsable: todos" },
                 ...responsables.map((opcion) => ({ value: opcion.value, label: `Responsable: ${opcion.label}` })),
               ]}
             />

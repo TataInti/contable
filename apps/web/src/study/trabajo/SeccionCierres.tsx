@@ -1,5 +1,5 @@
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, Table } from "@contable/design-system";
 import { StatusBadge } from "../../ui/StatusBadge";
 import type { useConfirmAction } from "../../ui/ConfirmAction";
 import type { ClientContextValue } from "../../context/ClientContext";
@@ -133,28 +133,16 @@ export function SeccionCierres({
               ]}
             />
           ) : (
-            <EmptyState
-              size="compact"
-              title="Sin cierres en curso"
-              description="Cuando se abra un cierre vas a ver su avance acá."
-              action={
-                puedeIniciar ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={!periodId || !activeFiscalYear}
-                    title={
-                      !activeFiscalYear
-                        ? "Seleccioná un período contable para abrir el cierre"
-                        : undefined
-                    }
-                    onClick={() => setShowClose(true)}
-                  >
-                    Iniciar cierre
-                  </Button>
-                ) : undefined
-              }
-            />
+            <p className="empty-line">
+              <span>Sin cierres en curso</span>
+              {puedeIniciar ? (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  {iniciar}
+                </>
+              ) : null}
+            </p>
+
           )}
         </section>
       </>

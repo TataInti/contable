@@ -633,13 +633,13 @@ describe("K9 · próximas obligaciones", () => {
     const filaConVencimiento = (
       await obligaciones.findByText("IVA · Demo: Nacional")
     ).closest("tr") as HTMLElement;
-    expect(within(filaConVencimiento).getByText("Demo: octubre 2026")).toBeTruthy();
+    expect(within(filaConVencimiento).getByText("octubre de 2026")).toBeTruthy();
     expect(within(filaConVencimiento).getByText("20/10/2026")).toBeTruthy();
     expect(within(filaConVencimiento).getByText("Pendiente")).toBeTruthy();
     const filaSinVencimiento = obligaciones
       .getByText("Ingresos Brutos · Demo: Tucumán")
       .closest("tr") as HTMLElement;
-    expect(within(filaSinVencimiento).getByText("01/10/2026 al 31/10/2026")).toBeTruthy();
+    expect(within(filaSinVencimiento).getByText("octubre de 2026")).toBeTruthy();
     // vigente: cambia con D7C-3 (sin vencimiento, la celda muestra el fin del período)
     expect(within(filaSinVencimiento).getByText("31/10/2026")).toBeTruthy();
     expect(within(filaSinVencimiento).getByText("Presentado")).toBeTruthy();

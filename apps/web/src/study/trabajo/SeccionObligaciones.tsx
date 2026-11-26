@@ -54,7 +54,8 @@ export function SeccionObligaciones({
               },
               {
                 key: "legajo",
-                header: <span className="sr-only">Acciones</span>,
+                header: "Acción",
+                align: "right",
                 render: (row) => (
                   <Button
                     size="sm"

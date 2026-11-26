@@ -370,6 +370,18 @@ export function StudyTrabajo() {
       />
 
       <div className="study-columns work-columns">
+        <SeccionObligaciones
+          obligations={obligations}
+          obligationRows={pendingObligationRows}
+          allPaid={obligationRows.length > 0 && pendingObligationRows.length === 0}
+          capabilities={capabilities}
+          navigate={navigate}
+          abrirLegajo={(taxPeriodId) => {
+            if (firmId && clientId) {
+              abrirLegajoDeObligacion({ firmId, clientId, taxPeriodId, setClientId, navigate });
+            }
+          }}
+        />
         <SeccionPedidos
           requests={requests}
           activeRequests={activeRequests}
@@ -378,7 +390,6 @@ export function StudyTrabajo() {
           openConversation={openConversation}
           sendRequest={sendRequest}
           setActiveReviewRequestId={setActiveReviewRequestId}
-          setShowRequest={setShowRequest}
           onSubir={(requestId) => openUpload(requestId)}
         />
         <SeccionCierres
@@ -393,18 +404,6 @@ export function StudyTrabajo() {
           setShowClose={(abrir) => {
             setShowRequest(false);
             setShowClose(abrir);
-          }}
-        />
-        <SeccionObligaciones
-          obligations={obligations}
-          obligationRows={pendingObligationRows}
-          allPaid={obligationRows.length > 0 && pendingObligationRows.length === 0}
-          capabilities={capabilities}
-          navigate={navigate}
-          abrirLegajo={(taxPeriodId) => {
-            if (firmId && clientId) {
-              abrirLegajoDeObligacion({ firmId, clientId, taxPeriodId, setClientId, navigate });
-            }
           }}
         />
       </div>

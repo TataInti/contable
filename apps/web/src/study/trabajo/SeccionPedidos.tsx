@@ -1,6 +1,5 @@
-import type { Dispatch, SetStateAction } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, Table } from "@contable/design-system";
 import { Icon } from "../../ui/Icon";
 import { StatusBadge } from "../../ui/StatusBadge";
 import type { ClientContextValue } from "../../context/ClientContext";
@@ -14,8 +13,7 @@ interface SeccionPedidosProps {
   previewEvidence: UseMutationResult<EvidencePreview, Error, string>;
   openConversation: UseMutationResult<ConversacionActiva, Error, WorkDocumentRequest>;
   sendRequest: UseMutationResult<unknown, Error, string>;
-  setActiveReviewRequestId: Dispatch<SetStateAction<string | null>>;
-  setShowRequest: Dispatch<SetStateAction<boolean>>;
+  setActiveReviewRequestId: (id: string | null) => void;
   /** Abre la carga de documentos apuntada al pedido de la fila. */
   onSubir: (requestId: string) => void;
 }
@@ -28,7 +26,6 @@ export function SeccionPedidos({
   openConversation,
   sendRequest,
   setActiveReviewRequestId,
-  setShowRequest,
   onSubir,
 }: SeccionPedidosProps) {
   return (
@@ -146,18 +143,10 @@ export function SeccionPedidos({
               ]}
             />
           ) : (
-            <EmptyState
-              size="compact"
-              title="Sin pedidos abiertos"
-              description="El cliente no tiene documentación pendiente."
-              action={
-                capabilities.has("request.manage") ? (
-                  <Button size="sm" variant="secondary" onClick={() => setShowRequest(true)}>
-                    Crear pedido
-                  </Button>
-                ) : undefined
-              }
-            />
+            <p className="empty-line">
+              <span>Sin pedidos abiertos</span>
+            </p>
+
           )}
         </section>
       </>
