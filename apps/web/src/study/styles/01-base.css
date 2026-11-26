@@ -14,6 +14,13 @@
   align-items: center;
 }
 
+.study-route-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--ds-space-2);
+}
+
 .study-page__header {
   display: flex;
   align-items: flex-end;
