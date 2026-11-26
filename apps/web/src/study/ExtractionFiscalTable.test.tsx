@@ -104,18 +104,20 @@ describe("ExtractionFiscalTable", () => {
     expect(within(rows[0]!).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
       "Campo",
       "Valor",
+      "Estado",
+      "Motivo",
     ]);
-    expect(rowForField(table, "CUIT emisor")[1]!.textContent).toBe("20-12345678-6");
+    expect(rowForField(table, "CUIT emisor")[1]!.textContent).toBe("20123456786");
     expect(rowForField(table, "Fecha")[1]!.textContent).toBe("31/10/2026");
     expect(rowForField(table, "Vencimiento del CAE")[1]!.textContent).toBe("10/11/2026");
     expect(rowForField(table, "IVA · alícuota 21%")[1]!.textContent).toBe(
-      "Alícuota: 21% · Importe: 210,00",
+      "Alícuota: 21% · Importe: 210.00",
     );
     expect(rowForField(table, "IVA · alícuota 10.5%")[1]!.textContent).toBe(
-      "Alícuota: 10.5% · Importe: 52,50",
+      "Alícuota: 10.5% · Importe: 52.50",
     );
     expect(rowForField(table, "Percepción – sin clasificar")[1]!.textContent).toBe(
-      "Texto original: IIBB · Importe: 15,00",
+      "Texto original: IIBB · Importe: 15.00",
     );
     expect(within(table).queryByText("hora", { exact: true })).toBeNull();
     expect(within(table).queryByText("confianza", { exact: true })).toBeNull();
@@ -135,15 +137,15 @@ describe("ExtractionFiscalTable", () => {
     const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
 
     expect(rowForField(table, "Percepción – IIBB")[1]!.textContent).toBe(
-      "Texto original: IIBB Buenos Aires · Importe: 15,00",
+      "Texto original: IIBB Buenos Aires · Importe: 15.00",
     );
     expect(rowForField(table, "Percepción – IVA")[1]!.textContent).toBe(
-      "Texto original: Percepción IVA · Importe: 5,00",
+      "Texto original: Percepción IVA · Importe: 5.00",
     );
     expect(rowForField(table, "Percepción – Ganancias")[1]!.textContent).toBe(
-      "Texto original: Retención ganancias · Importe: 20,00",
+      "Texto original: Retención ganancias · Importe: 20.00",
     );
-    
+    expect(rowForField(table, "Percepción – IIBB")[2]!.textContent).toBe("leído");
   });
 
   it("asigna percepción no reconocida a la fila Otras exacta", () => {
@@ -161,8 +163,10 @@ describe("ExtractionFiscalTable", () => {
     const iibb = rowForField(table, "Percepción – IIBB");
     const other = rowForField(table, "Percepción – Otras");
 
-    expect(iibb[1]!.textContent).not.toContain("a revisar");
-    expect(other[1]!.textContent).toContain(" · a revisar: percepción no reconocida");
+    expect(iibb[2]!.textContent).toBe("leído");
+    expect(iibb[3]!.textContent).toBe("");
+    expect(other[2]!.textContent).toBe("a revisar");
+    expect(other[3]!.textContent).toBe("percepción no reconocida");
   });
 
   it("asigna el motivo de IVA a la segunda de tres filas por sourcePath", () => {
@@ -182,10 +186,12 @@ describe("ExtractionFiscalTable", () => {
     const second = rowForField(table, "IVA · alícuota 21%");
     const third = rowForField(table, "IVA · alícuota 27%");
 
-    expect(first[1]!.textContent).not.toContain("a revisar");
-    expect(second[1]!.textContent).toContain(" · a revisar: importe poco legible");
-    
-    expect(third[1]!.textContent).not.toContain("a revisar");
+    expect(first[2]!.textContent).toBe("leído");
+    expect(first[3]!.textContent).toBe("");
+    expect(second[2]!.textContent).toBe("a revisar");
+    expect(second[3]!.textContent).toBe("importe poco legible");
+    expect(third[2]!.textContent).toBe("leído");
+    expect(third[3]!.textContent).toBe("");
   });
 
   it("muestra motivos sin sourcePath en el estado del documento", () => {
@@ -197,9 +203,9 @@ describe("ExtractionFiscalTable", () => {
     const documentStatus = screen.getByRole("status", { name: "Estado del documento" });
 
     expect(documentStatus.textContent).toBe("Estado del documento: a revisar · COMPONENT_SUM_MISMATCH");
-    
-    expect(rowForField(table, "Neto gravado")[1]!.textContent).not.toContain("a revisar");
-    
+    expect(rowForField(table, "Neto gravado")[2]!.textContent).toBe("leído");
+    expect(rowForField(table, "Neto gravado")[3]!.textContent).toBe("");
+    expect(rowForField(table, "IVA · alícuota 21%")[2]!.textContent).toBe("leído");
   });
 
   it.each([
@@ -235,7 +241,8 @@ describe("ExtractionFiscalTable", () => {
     expect(screen.getByRole("status", { name: "Estado del documento" }).textContent).toContain(
       "neto + IVA no cierra con el total",
     );
-    
+    expect(rowForField(table, "Neto gravado")[2]!.textContent).toBe("leído");
+    expect(rowForField(table, "IVA · alícuota 21%")[2]!.textContent).toBe("leído");
   });
 
   it("marca los valores null como no visibles", () => {
@@ -251,9 +258,10 @@ describe("ExtractionFiscalTable", () => {
 
     const letter = rowForField(table, "Letra");
     expect(letter[1]!.textContent).toBe("—");
-    
-    expect(letter[1]!.textContent).not.toContain("a revisar");
-    
+    expect(letter[2]!.textContent).toBe("no visible");
+    expect(letter[3]!.textContent).toBe("");
+    expect(rowForField(table, "IVA")[2]!.textContent).toBe("no visible");
+    expect(rowForField(table, "Percepciones")[2]!.textContent).toBe("no visible");
   });
 
   it.each([
@@ -267,8 +275,9 @@ describe("ExtractionFiscalTable", () => {
     const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
     const flagged = rowForField(table, label);
 
-    expect(flagged[1]!.textContent).toContain(" · a revisar: dato inválido");
-    
+    expect(flagged[2]!.textContent).toBe("a revisar");
+    expect(flagged[3]!.textContent).toBe("dato inválido");
+    expect(rowForField(table, otherLabel)[2]!.textContent).toBe("leído");
     expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
   });
 
@@ -290,20 +299,22 @@ describe("ExtractionFiscalTable", () => {
     const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
     const cuit = rowForField(table, "CUIT emisor");
 
-    expect(cuit[1]!.textContent).toContain(" · a revisar: CUIT poco legible");
-    
+    expect(cuit[2]!.textContent).toBe("a revisar");
+    expect(cuit[3]!.textContent).toBe("CUIT poco legible");
+    expect(rowForField(table, "CUIT receptor")[2]!.textContent).toBe("leído");
   });
 
   it("tolera reviewIssues vacío o ausente", () => {
     renderTable({ reviewIssues: [] });
     let table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
     expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
-    
+    expect(rowForField(table, "IVA · alícuota 21%")[2]!.textContent).toBe("leído");
+
     cleanup();
     renderTable();
     table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
     expect(screen.queryByRole("status", { name: "Estado del documento" })).toBeNull();
-    
+    expect(rowForField(table, "Percepción – sin clasificar")[2]!.textContent).toBe("leído");
   });
 
   it("muestra la corrección efectiva y distingue los campos cargados a mano", () => {
@@ -337,8 +348,8 @@ describe("ExtractionFiscalTable", () => {
     const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
 
     expect(rowForField(table, "Total")[1]!.textContent).toBe("120 sin formato");
-    expect(rowForField(table, "CUIT emisor")[1]!.textContent).toContain("dato cargado");
-    expect(rowForField(table, "CUIT emisor")[1]!.textContent).toBe("dato cargado · cargado a mano");
+    expect(rowForField(table, "CUIT emisor")[1]!.textContent).toBe("dato cargado");
+    expect(rowForField(table, "CUIT emisor")[2]!.textContent).toBe("cargado a mano");
   });
 
   it("muestra sin transformar los valores viejos no canónicos", () => {
@@ -371,7 +382,7 @@ describe("ExtractionFiscalTable", () => {
     });
     const table = screen.getByRole("table", { name: "Datos fiscales extraídos" });
 
-    expect(rowForField(table, "Fecha")[1]!.textContent).toContain("31/11/2026");
+    expect(rowForField(table, "Fecha")[1]!.textContent).toBe("31/11/2026");
     expect(rowForField(table, "Total")[1]!.textContent).toBe("importe libre");
   });
 });

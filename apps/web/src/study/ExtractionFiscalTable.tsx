@@ -7,7 +7,6 @@ import {
   isAutomatedReadingUnavailableReason,
 } from "./extractionReadiness";
 import { formatearFecha } from "../lib/formatoFechas";
-import { formatCuit } from "../lib/cuit";
 
 interface ExtractionFiscalTableProps {
   voucherData: VoucherData | null;
@@ -49,20 +48,12 @@ const AMOUNT_FORMAT = new Intl.NumberFormat("es-AR", {
   maximumFractionDigits: 2,
 });
 
-function displayAmount(value: string | null): string {
-  if (value === null) return "no visible";
-  return NORMALIZED_AMOUNT.test(value) ? AMOUNT_FORMAT.format(Number(value)) : value;
-}
-
 function displayScalarValue(key: string, value: string | null): string | null {
   // Los importes llegan normalizados ("29900.00"); se muestran en es-AR
   // ("29.900,00"). Un texto que no es un importe normalizado se deja tal cual
   // para no ocultar lo que realmente se leyó o cargó.
   if (value && AMOUNT_KEYS.has(key) && NORMALIZED_AMOUNT.test(value)) {
     return AMOUNT_FORMAT.format(Number(value));
-  }
-  if (value && (key === "issuerTaxId" || key === "receiverTaxId")) {
-    return formatCuit(value);
   }
   if (!value || (key !== "issueDate" && key !== "caeExpiration") || !isValidManualExtractionIsoDate(value)) {
     return value;
@@ -173,7 +164,7 @@ function buildRows(
         : voucher.iva.map((entry, index) => {
             const hasValue = entry.alicuota !== null || entry.importe !== null;
             const rate = entry.alicuota === null ? "no visible" : `${entry.alicuota}%`;
-            const amount = displayAmount(entry.importe);
+            const amount = entry.importe ?? "no visible";
             return makeRow(
               `iva-${index}`,
               entry.alicuota === null ? `IVA · alícuota ${index + 1}` : `IVA · alícuota ${rate}`,
@@ -196,7 +187,7 @@ function buildRows(
             return makeRow(
               `percepcion-${index}`,
               `Percepción – ${category}`,
-              `Texto original: ${originalText ?? "no visible"} · Importe: ${displayAmount(entry.importe)}`,
+              `Texto original: ${originalText ?? "no visible"} · Importe: ${entry.importe ?? "no visible"}`,
               [],
               issuesForRow(reviewIssues, "percepciones", index),
               hasValue,
@@ -270,17 +261,13 @@ export function ExtractionFiscalTable({
         rowKey={(row) => row.id}
         columns={[
           { key: "field", header: "Campo", accessor: (row) => row.field },
+          { key: "value", header: "Valor", accessor: (row) => row.value ?? "—" },
           {
-            key: "value",
-            header: "Valor",
-            accessor: (row) => (
-              <>
-                {row.value ?? "—"}
-                {row.manual ? <span className="extraction-field-note"> · cargado a mano</span> : null}
-                {row.reason ? <span className="extraction-field-note"> · a revisar: {row.reason}</span> : null}
-              </>
-            ),
+            key: "state",
+            header: "Estado",
+            accessor: (row) => (row.manual ? "cargado a mano" : row.reason ? "a revisar" : row.hasValue ? "leído" : "no visible"),
           },
+          { key: "reason", header: "Motivo", accessor: (row) => row.reason },
         ]}
       />
     </>
