@@ -71,33 +71,28 @@ describe("StudyClientes — columnas de la cartera (K2)", () => {
     cleanup();
   });
 
-  it("muestra las once columnas en su orden", async () => {
+  it("muestra las siete columnas en su orden", async () => {
     renderConRutas("/clientes", <StudyClientes />);
     const tabla = await screen.findByRole("table", { name: "Cartera de clientes" });
 
     expect(Array.from(tabla.querySelectorAll("thead th")).map((th) => th.textContent?.trim())).toEqual([
       "Cliente",
       "CUIT",
-      "Terminación de CUIT",
       "Condición IVA",
       "Provincia",
-      "Actividad",
-      "Norma",
-      "Cierre",
       "Ficha",
       "Cuenta",
       "",
     ]);
   });
 
-  it("cada columna lleva su clase; las secundarias son cuatro", async () => {
+  it("cada columna lleva su clase; la secundaria es Provincia", async () => {
     renderConRutas("/clientes", <StudyClientes />);
     const tabla = await screen.findByRole("table", { name: "Cartera de clientes" });
 
     for (const clase of [
       "client-list__client-column",
       "client-list__cuit-column",
-      "client-list__ending-column",
       "client-list__vat-column",
       "client-list__profile-column",
       "client-list__status-column",
@@ -105,7 +100,7 @@ describe("StudyClientes — columnas de la cartera (K2)", () => {
     ]) {
       expect(tabla.querySelectorAll(`thead th.${clase}`)).toHaveLength(1);
     }
-    expect(tabla.querySelectorAll("thead th.client-list__secondary-column")).toHaveLength(4);
+    expect(tabla.querySelectorAll("thead th.client-list__secondary-column")).toHaveLength(1);
   });
 
   it("el nombre es un botón accesible; el cliente en contexto lleva aria-current y «En contexto»", async () => {
@@ -128,17 +123,16 @@ describe("StudyClientes — columnas de la cartera (K2)", () => {
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
     expect(celda("c1", 1).textContent).toBe("20-00000006-0");
-    expect(celda("c1", 2).textContent).toBe("0");
-    expect(celda("c6", 2).querySelector(".dense-dim")?.textContent).toBe("Sin CUIT");
-    expect(celda("c1", 3).textContent).toBe(CLIENT_VAT_CONDITION_LABELS.RESPONSABLE_INSCRIPTO);
+    expect(celda("c6", 1).querySelector(".dense-dim")?.textContent).toBe("Sin CUIT");
+    // La condición IVA va con sigla y el nombre completo en el tooltip.
+    expect(celda("c1", 2).textContent).toBe("RI");
+    expect(celda("c1", 2).querySelector("[title]")?.getAttribute("title")).toBe(CLIENT_VAT_CONDITION_LABELS.RESPONSABLE_INSCRIPTO);
+    expect(celda("c2", 2).querySelector(".dense-dim")?.textContent).toBe("—");
+    expect(celda("c1", 3).textContent).toBe("Tucumán");
     expect(celda("c2", 3).querySelector(".dense-dim")?.textContent).toBe("—");
-    expect(celda("c1", 4).textContent).toBe("Tucumán");
-    expect(celda("c2", 4).querySelector(".dense-dim")?.textContent).toBe("—");
-    expect(celda("c1", 7).textContent).toBe("jun");
-    expect(celda("c2", 7).querySelector(".dense-dim")?.textContent).toBe("—");
-    expect(celda("c1", 8).querySelector(".dense-dim")?.textContent).toBe("Completa");
-    expect(celda("c2", 8).textContent?.trim()).toBe("Falta: ficha contable, perfil fiscal activo y 4 más");
-    expect(celda("c2", 8).querySelector("[title]")?.getAttribute("title")).toBe(
+    expect(celda("c1", 4).querySelector(".dense-dim")?.textContent).toBe("Completa");
+    expect(celda("c2", 4).textContent?.trim()).toBe("Falta: ficha contable, perfil fiscal activo y 4 más");
+    expect(celda("c2", 4).querySelector("[title]")?.getAttribute("title")).toBe(
       "Falta: ficha contable, perfil fiscal activo, inscripción fiscal, actividad fiscal, período fiscal, obligación",
     );
   });
@@ -182,18 +176,17 @@ describe("StudyClientes — columnas de la cartera (K2)", () => {
     ];
     const conDetalle = [
       "client-list__client-column",
-      "client-list__vat-column",
       "client-list__profile-column",
       "client-list__status-column",
       "client-list__action-column",
     ];
 
-    expect(anchos(sinDetalle)).toEqual(["18%", "10%", "5%", "14%", "11%", "9%"]);
+    expect(anchos(sinDetalle)).toEqual(["30%", "13%", "13%", "18%", "12%", "8%"]);
 
     fireEvent.click(within(tablaCartera()).getByText("20-00000006-0"));
     await screen.findByRole("complementary", { name: "Detalle de Sintético Alfa S.A." });
 
     expect(tablaCartera().querySelectorAll("thead th.client-list__secondary-column")).toHaveLength(0);
-    expect(anchos(conDetalle)).toEqual(["24%", "12%", "16%", "16%", "13%"]);
+    expect(anchos(conDetalle)).toEqual(["40%", "30%", "16%", "14%"]);
   });
 });

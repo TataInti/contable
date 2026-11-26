@@ -477,7 +477,7 @@ export function StudyCatalogosFiscales() {
   const jurisdictionLabel = (jurisdiction: JurisdictionOption) => {
     const parent = jurisdiction.parent ?? jurisdictions.find((item) => item.id === jurisdiction.parentId);
     const ancestry = parent ? `, ${parent.name}` : "";
-    return `${jurisdiction.name} — ${jurisdictionKindLabel[jurisdiction.kind]}${ancestry} (${jurisdiction.code})`;
+    return `${jurisdiction.name} — ${jurisdictionKindLabel[jurisdiction.kind]}${ancestry}`;
   };
   const jurisdictionName = (jurisdictionId: string) => {
     const jurisdiction = jurisdictions.find((item) => item.id === jurisdictionId);
@@ -1312,9 +1312,25 @@ export function StudyCatalogosFiscales() {
         onClose={() => { setDrawer(null); setEditingAuthority(null); }}
         title={drawer === "authority-edit" ? "Editar organismo recaudador" : "Nuevo organismo recaudador"}
         description="La jurisdicción define el alcance en el que puede asignarse este organismo: ARCA recauda en Nación, las DGR en cada provincia y las direcciones de rentas en cada municipio."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="authority-form"
+              loading={editingAuthority ? updateAuthority.isPending : createAuthority.isPending}
+              disabled={!authorityForm.code.trim() || !authorityForm.name.trim() || !authorityForm.jurisdictionId}
+            >
+              {editingAuthority ? "Guardar cambios" : "Crear organismo"}
+            </Button>
+          </>
+        }
       >
         <form
-          className="study-form study-form--compact dense-form"
+          id="authority-form"
+          className="study-form study-form--compact dense-form fiscal-required-form"
           onSubmit={(event) => {
             event.preventDefault();
             if (editingAuthority) updateAuthority.mutate();
@@ -1339,7 +1355,7 @@ export function StudyCatalogosFiscales() {
             required
           />
           <div className="ds-field dense-form__full">
-            <label className="ds-field__label" htmlFor="authority-jurisdiction">Jurisdicción</label>
+            <label className="ds-field__label" htmlFor="authority-jurisdiction">Jurisdicción <span aria-hidden="true">*</span></label>
             <SearchSelect
               id="authority-jurisdiction"
               label="Jurisdicción"
@@ -1356,18 +1372,9 @@ export function StudyCatalogosFiscales() {
             />
           </div>
           <MutationError error={editingAuthority ? updateAuthority.error : createAuthority.error} />
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={editingAuthority ? updateAuthority.isPending : createAuthority.isPending}
-              disabled={!authorityForm.code.trim() || !authorityForm.name.trim() || !authorityForm.jurisdictionId}
-            >
-              {editingAuthority ? "Guardar cambios" : "Crear organismo"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
-              Cancelar
-            </Button>
-          </div>
+          {!authorityForm.code.trim() || !authorityForm.name.trim() || !authorityForm.jurisdictionId ? (
+            <p className="form-submit-hint" role="note">Completá código, nombre y jurisdicción para guardar el organismo.</p>
+          ) : null}
         </form>
       </ActionDrawer>
 
@@ -1376,9 +1383,33 @@ export function StudyCatalogosFiscales() {
         onClose={() => { setDrawer(null); setEditingRegime(null); }}
         title={drawer === "regime-edit" ? "Editar régimen" : "Nuevo régimen"}
         description="El organismo recaudador seleccionado debe corresponder a la jurisdicción del régimen."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="regime-form"
+              loading={editingRegime ? updateRegime.isPending : createRegime.isPending}
+              disabled={
+                !regimeForm.code.trim() ||
+                !regimeForm.name.trim() ||
+                !regimeForm.taxTypeId ||
+                !regimeForm.calcFamilyId ||
+                !regimeForm.moduleId ||
+                !regimeForm.jurisdictionId ||
+                !regimeForm.authorityId
+              }
+            >
+              {editingRegime ? "Guardar cambios" : "Crear régimen"}
+            </Button>
+          </>
+        }
       >
         <form
-          className="study-form study-form--compact dense-form"
+          id="regime-form"
+          className="study-form study-form--compact dense-form fiscal-required-form"
           onSubmit={(event) => {
             event.preventDefault();
             if (editingRegime) updateRegime.mutate();
@@ -1404,7 +1435,7 @@ export function StudyCatalogosFiscales() {
             required
           />
           <div className="ds-field">
-            <label className="ds-field__label" htmlFor="regime-tax-type">Impuesto</label>
+            <label className="ds-field__label" htmlFor="regime-tax-type">Impuesto <span aria-hidden="true">*</span></label>
             <SearchSelect
               id="regime-tax-type"
               label="Impuesto"
@@ -1428,7 +1459,7 @@ export function StudyCatalogosFiscales() {
             />
           </div>
           <div className="ds-field">
-            <label className="ds-field__label" htmlFor="regime-calc-family">Familia de cálculo</label>
+            <label className="ds-field__label" htmlFor="regime-calc-family">Familia de cálculo <span aria-hidden="true">*</span></label>
             <SearchSelect
               id="regime-calc-family"
               label="Familia de cálculo"
@@ -1467,7 +1498,7 @@ export function StudyCatalogosFiscales() {
             ) : null}
           </div>
           <div className="ds-field">
-            <label className="ds-field__label" htmlFor="regime-module">Módulo</label>
+            <label className="ds-field__label" htmlFor="regime-module">Módulo <span aria-hidden="true">*</span></label>
             <SearchSelect
               id="regime-module"
               label="Módulo"
@@ -1503,7 +1534,7 @@ export function StudyCatalogosFiscales() {
             ) : null}
           </div>
           <div className="ds-field">
-            <label className="ds-field__label" htmlFor="regime-jurisdiction">Jurisdicción</label>
+            <label className="ds-field__label" htmlFor="regime-jurisdiction">Jurisdicción <span aria-hidden="true">*</span></label>
             <SearchSelect
               id="regime-jurisdiction"
               label="Jurisdicción"
@@ -1520,7 +1551,7 @@ export function StudyCatalogosFiscales() {
             />
           </div>
           <div className="ds-field dense-form__full">
-            <label className="ds-field__label" htmlFor="regime-authority">Organismo recaudador</label>
+            <label className="ds-field__label" htmlFor="regime-authority">Organismo recaudador <span aria-hidden="true">*</span></label>
             <SearchSelect
               id="regime-authority"
               label="Organismo recaudador"
@@ -1532,7 +1563,7 @@ export function StudyCatalogosFiscales() {
               placeholder="Seleccioná un organismo…"
               options={matchingAuthorities.map((authority) => ({
                 value: authority.id,
-                label: `${authority.name} (${authority.code})${!authority.isActive ? " (oculto)" : ""}`,
+                label: `${authority.name}${!authority.isActive ? " (oculto)" : ""}`,
                 disabled: !authority.isActive,
               }))}
             />
@@ -1548,26 +1579,10 @@ export function StudyCatalogosFiscales() {
             </Notice>
           ) : null}
           <MutationError error={createRegime.error} />
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={editingRegime ? updateRegime.isPending : createRegime.isPending}
-              disabled={
-                !regimeForm.code.trim() ||
-                !regimeForm.name.trim() ||
-                !regimeForm.taxTypeId ||
-                !regimeForm.calcFamilyId ||
-                !regimeForm.moduleId ||
-                !regimeForm.jurisdictionId ||
-                !regimeForm.authorityId
-              }
-            >
-              {editingRegime ? "Guardar cambios" : "Crear régimen"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setDrawer(null)}>
-              Cancelar
-            </Button>
-          </div>
+          {!regimeForm.code.trim() || !regimeForm.name.trim() || !regimeForm.taxTypeId ||
+          !regimeForm.calcFamilyId || !regimeForm.moduleId || !regimeForm.jurisdictionId || !regimeForm.authorityId ? (
+            <p className="form-submit-hint" role="note">Completá los campos obligatorios para guardar el régimen.</p>
+          ) : null}
         </form>
       </ActionDrawer>
 
@@ -1577,9 +1592,32 @@ export function StudyCatalogosFiscales() {
         onClose={() => setActivityDrawer(null)}
         title="Nueva actividad económica"
         description="El código se guarda en mayúsculas. Completá sus campos de catálogo y vigencia."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="activity-form"
+              loading={createActivity.isPending}
+              disabled={
+                !activityForm.code.trim() ||
+                !activityForm.name.trim() ||
+                !activityForm.jurisdictionId ||
+                !activityForm.validFrom ||
+                !activityCodeValid ||
+                !activityValidityValid
+              }
+            >
+              Crear actividad
+            </Button>
+          </>
+        }
       >
         <form
-          className="study-form study-form--compact dense-form"
+          id="activity-form"
+          className="study-form study-form--compact dense-form fiscal-required-form"
           onSubmit={(event) => {
             event.preventDefault();
             createActivity.mutate();
@@ -1610,7 +1648,7 @@ export function StudyCatalogosFiscales() {
             required
           />
           <div className="ds-field dense-form__full">
-            <label className="ds-field__label" htmlFor="activity-jurisdiction">Jurisdicción</label>
+            <label className="ds-field__label" htmlFor="activity-jurisdiction">Jurisdicción <span aria-hidden="true">*</span></label>
             <SearchSelect
               id="activity-jurisdiction"
               label="Jurisdicción"
@@ -1669,25 +1707,6 @@ export function StudyCatalogosFiscales() {
               Completá código, nombre, jurisdicción y vigencia para poder crear la actividad.
             </p>
           ) : null}
-          <div className="study-form__actions">
-            <Button
-              type="submit"
-              loading={createActivity.isPending}
-              disabled={
-                !activityForm.code.trim() ||
-                !activityForm.name.trim() ||
-                !activityForm.jurisdictionId ||
-                !activityForm.validFrom ||
-                !activityCodeValid ||
-                !activityValidityValid
-              }
-            >
-              Crear actividad
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
-              Cancelar
-            </Button>
-          </div>
         </form>
       </ActionDrawer>
 
@@ -1696,9 +1715,32 @@ export function StudyCatalogosFiscales() {
         onClose={() => setActivityDrawer(null)}
         title="Editar actividad económica"
         description="Actualizá el código, la jurisdicción, la fuente o la vigencia de la actividad."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="activity-edit-form"
+              loading={updateActivity.isPending}
+              disabled={
+                !activityForm.code.trim() ||
+                !activityCodeValid ||
+                !activityForm.name.trim() ||
+                !activityForm.jurisdictionId ||
+                !activityForm.validFrom ||
+                !activityValidityValid
+              }
+            >
+              Guardar cambios
+            </Button>
+          </>
+        }
       >
         {editingActivity ? (
           <form
+            id="activity-edit-form"
             className="study-form study-form--compact dense-form"
             onSubmit={(event) => {
               event.preventDefault();
@@ -1782,25 +1824,6 @@ export function StudyCatalogosFiscales() {
               }
             />
             <MutationError error={updateActivity.error} />
-            <div className="study-form__actions">
-              <Button
-                type="submit"
-                loading={updateActivity.isPending}
-                disabled={
-                  !activityForm.code.trim() ||
-                  !activityCodeValid ||
-                  !activityForm.name.trim() ||
-                  !activityForm.jurisdictionId ||
-                  !activityForm.validFrom ||
-                  !activityValidityValid
-                }
-              >
-                Guardar cambios
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
-                Cancelar
-              </Button>
-            </div>
           </form>
         ) : null}
       </ActionDrawer>
@@ -1810,9 +1833,20 @@ export function StudyCatalogosFiscales() {
         onClose={() => setActivityDrawer(null)}
         title="Ocultar actividad económica"
         description="El registro, sus vínculos y reglas se conservan. La actividad deja de ofrecerse en los selectores."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button type="submit" form="activity-deactivate-form" loading={toggleActivity.isPending}>
+              Ocultar
+            </Button>
+          </>
+        }
       >
         {editingActivity ? (
           <form
+            id="activity-deactivate-form"
             className="study-form study-form--compact"
             onSubmit={(event) => {
               event.preventDefault();
@@ -1823,14 +1857,6 @@ export function StudyCatalogosFiscales() {
               ¿Ocultamos <strong>{editingActivity.code}</strong> — {editingActivity.name}?
             </p>
             <MutationError error={toggleActivity.error} />
-            <div className="study-form__actions">
-              <Button type="submit" loading={toggleActivity.isPending}>
-                Ocultar
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
-                Cancelar
-              </Button>
-            </div>
           </form>
         ) : null}
       </ActionDrawer>
@@ -1860,7 +1886,7 @@ export function StudyCatalogosFiscales() {
       >
         <form
           id="jurisdiction-create-form"
-          className="study-form study-form--compact dense-form"
+          className="study-form study-form--compact dense-form fiscal-required-form"
           onSubmit={(event) => {
             event.preventDefault();
             createJurisdiction.mutate();
@@ -1885,7 +1911,7 @@ export function StudyCatalogosFiscales() {
               required
             />
             <div className="ds-field">
-              <label className="ds-field__label" htmlFor="jurisdiction-kind">Nivel</label>
+              <label className="ds-field__label" htmlFor="jurisdiction-kind">Nivel <span aria-hidden="true">*</span></label>
               <SearchSelect
                 id="jurisdiction-kind"
                 label="Nivel"
@@ -1906,7 +1932,7 @@ export function StudyCatalogosFiscales() {
             </div>
             {jurisdictionForm.kind !== "NATIONAL" ? (
               <div className="ds-field dense-form__full">
-                <label className="ds-field__label" htmlFor="jurisdiction-parent">Jurisdicción padre</label>
+                <label className="ds-field__label" htmlFor="jurisdiction-parent">Jurisdicción padre <span aria-hidden="true">*</span></label>
                 <SearchSelect
                   id="jurisdiction-parent"
                   label="Jurisdicción padre"
@@ -1930,6 +1956,9 @@ export function StudyCatalogosFiscales() {
               </div>
             ) : null}
             <MutationError error={createJurisdiction.error} />
+            {!jurisdictionForm.code.trim() || !jurisdictionForm.name.trim() || (jurisdictionForm.kind !== "NATIONAL" && !jurisdictionForm.parentId) ? (
+              <p className="form-submit-hint" role="note">Completá los campos obligatorios para crear la jurisdicción.</p>
+            ) : null}
           </div>
         </form>
       </ActionDrawer>
@@ -2033,9 +2062,17 @@ export function StudyCatalogosFiscales() {
         onClose={() => setMasterDrawer(null)}
         title="Nuevo tipo de impuesto"
         description="Agregá el impuesto que usa el estudio para definir sus regímenes fiscales."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+            <Button type="submit"
+              form="tax-type-form" loading={createTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Crear tipo de impuesto</Button>
+          </>
+        }
       >
         <form
-          className="study-form study-form--compact dense-form"
+          id="tax-type-form"
+          className="study-form study-form--compact dense-form fiscal-required-form"
           onSubmit={(event) => {
             event.preventDefault();
             createTaxType.mutate();
@@ -2084,10 +2121,9 @@ export function StudyCatalogosFiscales() {
             ) : null}
           </div>
           <MutationError error={createTaxType.error} />
-          <div className="study-form__actions">
-            <Button type="submit" loading={createTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Crear tipo de impuesto</Button>
-            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
-          </div>
+          {!taxTypeForm.code.trim() || !taxTypeForm.name.trim() ? (
+            <p className="form-submit-hint" role="note">Completá código y nombre para crear el tipo de impuesto.</p>
+          ) : null}
         </form>
       </ActionDrawer>
 
@@ -2096,9 +2132,16 @@ export function StudyCatalogosFiscales() {
         onClose={() => setMasterDrawer(null)}
         title="Editar tipo de impuesto"
         description="Actualizá el código o el nombre del tipo de impuesto."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+            <Button type="submit" form="tax-type-edit-form" loading={updateTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Guardar cambios</Button>
+          </>
+        }
       >
         {editingTaxType ? (
           <form
+            id="tax-type-edit-form"
             className="study-form study-form--compact dense-form"
             onSubmit={(event) => {
               event.preventDefault();
@@ -2124,10 +2167,6 @@ export function StudyCatalogosFiscales() {
               required
             />
             <MutationError error={updateTaxType.error} />
-            <div className="study-form__actions">
-              <Button type="submit" loading={updateTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Guardar cambios</Button>
-              <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
-            </div>
           </form>
         ) : null}
       </ActionDrawer>
