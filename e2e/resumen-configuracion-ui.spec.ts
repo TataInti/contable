@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { RUN, SUFFIX, goTo, login, syntheticCuit } from "./helpers/ui";
-import { altaClienteRI, crearPeriodoIIBB, inscribirIIBB, pick, vincularActividad, IIBB } from "./helpers/liquidacion-ui";
+import { altaClienteRI, crearPeriodoIIBB, inscribirIIBB, vincularActividad, IIBB } from "./helpers/liquidacion-ui";
 
 /**
  * Un solo estado de la configuración fiscal (D4), operado como lo opera el contador: se completa la configuración de
@@ -8,7 +8,7 @@ import { altaClienteRI, crearPeriodoIIBB, inscribirIIBB, pick, vincularActividad
  *
  *   1. Alta del cliente, perfil fiscal activo, IIBB con actividad de restaurante y período de octubre con obligación.
  *   2. Configuración fiscal → Resumen: «Configuración completa».
- *   3. Resumen del cliente: «Configuración fiscal» muestra «Completado» (no «Pendiente»).
+ *   3. Resumen del cliente: «Configuración fiscal» muestra «Completa» (no «Pendiente»).
  *
  * Todo sintético y con el sufijo de la corrida. Solo se opera por la interfaz.
  */
@@ -39,11 +39,12 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
   await test.step("Resumen del cliente: la configuración fiscal figura completa, como en Configuración fiscal", async () => {
     await goTo(page, "Resumen");
     const fila = page.locator(".client-summary__overview-facts > div").filter({ hasText: "Configuración fiscal" });
-    await expect(fila, "dato «Configuración fiscal» del Resumen").toContainText("Completado", { timeout: 15_000 });
+    await expect(fila, "dato «Configuración fiscal» del Resumen").toContainText("Completa", { timeout: 15_000 });
     await expect(fila).not.toContainText("Pendiente");
     await expect(page.locator(".client-summary__overview-status")).toContainText("Activo");
     await expect(page.locator(".client-summary__overview-status")).not.toContainText("En configuración");
-    const encabezado = `${CLIENTE.legalName} · ${CLIENTE.tradeName} · CUIT ${CLIENTE.cuit.slice(0, 2)}-${CLIENTE.cuit.slice(2, 10)}-${CLIENTE.cuit.slice(10)}`;
+    await expect(page.getByRole("heading", { level: 1, name: CLIENTE.legalName })).toBeVisible();
+    const encabezado = `${CLIENTE.tradeName} · CUIT ${CLIENTE.cuit.slice(0, 2)}-${CLIENTE.cuit.slice(2, 10)}-${CLIENTE.cuit.slice(10)}`;
     await expect(page.getByText(encabezado, { exact: true })).toBeVisible();
   });
 
@@ -60,8 +61,9 @@ test("el Resumen del cliente muestra la misma configuración fiscal completa que
     await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
 
     await goTo(page, "Resumen");
-    await pick(page.getByRole("combobox", { name: "Sección del cliente" }), "Ficha contable");
-    await expect(page.getByText("Sin norma contable", { exact: true })).toBeVisible();
+    await page.getByRole("navigation", { name: "Secciones internas del cliente" }).getByRole("button", { name: "Ficha contable" }).click();
+    await expect(page.getByRole("heading", { name: "Ficha contable", level: 2 })).toBeVisible();
+    await expect(page.getByText("Sin norma contable", { exact: true })).toHaveCount(0);
     await expect(page.getByText(/falta[^.]*norma contable/i)).toHaveCount(0);
   });
 });
