@@ -5,7 +5,7 @@ import { documentFileName, documentTypeLabel, normalizeDocumentSearch } from "./
 
 /**
  * Colas de la Bandeja documental, por estado del documento (no de la extracción).
- * EXTRACTED es «Para revisar» y REVIEWED es «Revisado»: aprobar una extracción mueve el
+ * EXTRACTED es «Para revisar» y REVIEWED es «Aprobado»: aprobar una extracción mueve el
  * documento de una cola a la otra (ver extraction-service.approve).
  *
  * Lógica pura: los indicadores, el filtro y la búsqueda de la lista salen de acá.
@@ -36,7 +36,7 @@ export function belongsToDocumentQueue(document: { status: string }, filter: Doc
  */
 const NOMBRE_EN_BANDEJA: Readonly<Record<string, string>> = {
   EXTRACTED: "Para revisar",
-  REVIEWED: "Revisado",
+  REVIEWED: "Aprobado",
   UPLOADED: "Procesando",
   VALIDATING: "Procesando",
   PROCESSING: "Procesando",

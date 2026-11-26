@@ -58,7 +58,10 @@ export function CabeceraBandeja({
       <StatStrip
         label="Vistas de la bandeja"
         items={[
-          ...vistas.map((vista) => ({
+          // Las vistas vacías (salvo «Todos» y la activa) no ocupan lugar: quedan las que tienen algo para hacer.
+          ...vistas
+            .filter((vista) => vista.id === "ALL" || vista.id === vistaActiva || vista.value !== 0)
+            .map((vista) => ({
             key: vista.id,
             label: vista.label,
             value: vista.value,
@@ -68,7 +71,7 @@ export function CabeceraBandeja({
           })),
           {
             key: "pendientes",
-            label: "Ítems pendientes",
+            label: "Pedidos por completar",
             value: pendientes.value,
             tone: pendientes.warn ? ("warn" as const) : undefined,
           },
