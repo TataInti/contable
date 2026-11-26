@@ -416,7 +416,7 @@ describe("StudyExpedienteMensual", () => {
 
     // El botón del encabezado aparece deshabilitado hasta que carga el período
     // fiscal: esperamos a que esté habilitado antes de accionar.
-    fireEvent.click(await screen.findByRole("button", { name: "Acciones del período" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Más acciones" }));
     const createButton = await screen.findByRole<HTMLButtonElement>("menuitem", { name: /Nuevo legajo/ });
     await waitFor(() => expect(createButton.getAttribute("aria-disabled")).not.toBe("true")); // vigente: cambia con A29
     fireEvent.click(createButton);

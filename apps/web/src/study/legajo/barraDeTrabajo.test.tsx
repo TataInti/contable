@@ -168,7 +168,7 @@ describe("Legajo · barra de trabajo (Barra 2a)", () => {
     ["CALCULATED", ["Enviar a revisión"]],
     ["IN_REVIEW", ["Solicitar cambios", "Aprobar revisión"]],
     ["REVIEWED", ["Finalizar"]],
-    ["FINALIZED", ["Crear rectificativa"]],
+    ["FINALIZED", []], // 09-3: «Crear rectificativa» pasó al menú «Más acciones»
   ])(
     "estado %s: la barra muestra su acción del legajo y como máximo una primaria",
     async (estado, acciones) => {
@@ -287,7 +287,7 @@ function revisionAnterior() {
 describe("Legajo · acciones del período, revisión y solo lectura (Barra 2a)", () => {
   it("«Exportar libros» abre el cajón desde el menú y, al cerrarlo, el foco vuelve al botón del menú", async () => {
     renderLegajo({ legajos: [legajoDemo("DRAFT")] });
-    const boton = await within(barra()).findByRole("button", { name: "Acciones del período" });
+    const boton = await within(barra()).findByRole("button", { name: "Más acciones" });
     fireEvent.click(boton);
     const exportar = screen.getByRole("menuitem", { name: /Exportar libros/ });
     await waitFor(() => expect(exportar.getAttribute("aria-disabled")).not.toBe("true"));
@@ -299,7 +299,7 @@ describe("Legajo · acciones del período, revisión y solo lectura (Barra 2a)",
 
   it("«Exportar libros» desde el menú pide el resumen y habilita «Descargar libro»", async () => {
     renderLegajo({ legajos: [legajoDemo("DRAFT")] });
-    fireEvent.click(await within(barra()).findByRole("button", { name: "Acciones del período" }));
+    fireEvent.click(await within(barra()).findByRole("button", { name: "Más acciones" }));
     const exportar = screen.getByRole("menuitem", { name: /Exportar libros/ });
     await waitFor(() => expect(exportar.getAttribute("aria-disabled")).not.toBe("true"));
     fireEvent.click(exportar);
@@ -323,8 +323,8 @@ describe("Legajo · acciones del período, revisión y solo lectura (Barra 2a)",
   it("la revisión más reciente se abre por defecto y el menú lista cada revisión con su estado", async () => {
     renderLegajo({ legajos: [revisionVigente(), revisionAnterior()] });
     await within(barra()).findByRole("button", { name: "Calcular liquidación" });
-    expect(within(barra()).getByRole("button", { name: "Revisión 2" })).toBeTruthy();
-    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 2" }));
+    expect(within(barra()).getByRole("button", { name: "Revisión 2 de 2" })).toBeTruthy();
+    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 2 de 2" }));
     expect(screen.getByRole("menuitemradio", { name: /Revisión 2.*la más reciente/ })).toBeTruthy();
     expect(
       screen.getByRole("menuitemradio", {
@@ -336,17 +336,17 @@ describe("Legajo · acciones del período, revisión y solo lectura (Barra 2a)",
   it("elegir una revisión anterior la muestra en solo lectura, sin acciones que escriban", async () => {
     renderLegajo({ legajos: [revisionVigente(), revisionAnterior()] });
     await within(barra()).findByRole("button", { name: "Calcular liquidación" });
-    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 2" }));
+    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 2 de 2" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: /^Revisión 1/ }));
     expect(
       await within(barra()).findByText(
         "Revisión 1 en solo lectura: fue reemplazada por la revisión 2.",
       ),
     ).toBeTruthy();
-    expect(within(barra()).getByRole("button", { name: "Revisión 1" })).toBeTruthy();
+    expect(within(barra()).getByRole("button", { name: "Revisión 1 de 2" })).toBeTruthy();
     expect(within(barra()).queryByRole("button", { name: "Calcular liquidación" })).toBeNull();
     expect(within(barra()).queryByRole("button", { name: "Crear rectificativa" })).toBeNull();
-    fireEvent.click(within(barra()).getByRole("button", { name: "Acciones del período" }));
+    fireEvent.click(within(barra()).getByRole("button", { name: "Más acciones" }));
     expect(
       screen.getByRole("menuitem", { name: /Nuevo legajo/ }).getAttribute("aria-disabled"),
     ).toBe("true");
@@ -356,16 +356,16 @@ describe("Legajo · acciones del período, revisión y solo lectura (Barra 2a)",
 describe("Legajo · sustitutas de la banda de cifras (BandaEstado.test.tsx, retirada en Barra 2a)", () => {
   it("con 1 legajo, el menú «Revisión» lista una sola revisión y no hay banda de cifras // vigente: cambia con A29", async () => {
     renderLegajo({ legajos: [legajoDemo("DRAFT")] });
-    await within(barra()).findByRole("button", { name: "Revisión 1" });
-    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 1" }));
+    await within(barra()).findByRole("button", { name: "Revisión 1 de 1" });
+    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 1 de 1" }));
     expect(screen.getAllByRole("menuitemradio")).toHaveLength(1);
     expect(screen.queryByText(/\d+ Componentes?/)).toBeNull();
   });
 
   it("con 2 legajos, el menú «Revisión» lista las dos revisiones y no hay banda de cifras // vigente: cambia con A29", async () => {
     renderLegajo({ legajos: [revisionVigente(), revisionAnterior()] });
-    await within(barra()).findByRole("button", { name: "Revisión 2" });
-    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 2" }));
+    await within(barra()).findByRole("button", { name: "Revisión 2 de 2" });
+    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 2 de 2" }));
     expect(screen.getAllByRole("menuitemradio")).toHaveLength(2);
     expect(screen.queryByText(/\d+ Componentes?/)).toBeNull();
   });
@@ -383,10 +383,11 @@ describe("Legajo · correcciones de la barra (Barra 2c)", () => {
     ).toEqual(["Seleccioná un mes…", "Octubre de 2026"]);
   });
 
-  it("«Crear rectificativa» tiene el tamaño de los demás controles de la barra (32 px)", async () => {
+  it("«Crear rectificativa» está en el menú «Más acciones» y no como botón de la barra (09-3)", async () => {
     renderLegajo({ legajos: [legajoDemo("FINALIZED")] });
-    const boton = await within(barra()).findByRole("button", { name: "Crear rectificativa" });
-    expect(boton.classList.contains("ds-button--sm")).toBe(true);
+    fireEvent.click(await within(barra()).findByRole("button", { name: "Más acciones" }));
+    expect(await screen.findByRole("menuitem", { name: /Crear rectificativa/ })).toBeTruthy();
+    expect(within(barra()).queryByRole("button", { name: "Crear rectificativa" })).toBeNull();
   });
 
   it("la ayuda extensa de Clasificación queda en tooltip y el motivo de solo lectura sigue visible", async () => {
@@ -405,7 +406,6 @@ describe("Legajo · correcciones de la barra (Barra 2c)", () => {
     ["IN_REVIEW", "Solicitar cambios"],
     ["IN_REVIEW", "Aprobar revisión"],
     ["REVIEWED", "Finalizar"],
-    ["FINALIZED", "Crear rectificativa"],
   ])("en %s, «%s» mide 32 px: tamaño sm como el resto de los controles de la barra", async (estado, nombre) => {
     renderLegajo({ legajos: [legajoDemo(estado)] });
     const boton = await within(barra()).findByRole("button", { name: nombre });
@@ -417,7 +417,7 @@ describe("Legajo · aviso de solo lectura con salida (Barra 2e)", () => {
   it("«Ir a la revisión 2» en el aviso de la revisión anterior elige la vigente y lleva el foco al contenido", async () => {
     renderLegajo({ legajos: [revisionVigente(), revisionAnterior()] });
     await within(barra()).findByRole("button", { name: "Calcular liquidación" });
-    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 2" }));
+    fireEvent.click(within(barra()).getByRole("button", { name: "Revisión 2 de 2" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: /^Revisión 1/ }));
     const aviso = await within(barra()).findByText(
       "Revisión 1 en solo lectura: fue reemplazada por la revisión 2.",
@@ -425,7 +425,7 @@ describe("Legajo · aviso de solo lectura con salida (Barra 2e)", () => {
     const ir = within(barra()).getByRole("button", { name: "Ir a la revisión 2" });
     expect(aviso.closest(".work-bar__nota")?.contains(ir)).toBe(true);
     fireEvent.click(ir);
-    expect(within(barra()).getByRole("button", { name: "Revisión 2" })).toBeTruthy();
+    expect(within(barra()).getByRole("button", { name: "Revisión 2 de 2" })).toBeTruthy();
     expect(within(barra()).queryByText(/en solo lectura/)).toBeNull();
     expect(document.activeElement).toBe(document.getElementById("workpaper-panel"));
   });

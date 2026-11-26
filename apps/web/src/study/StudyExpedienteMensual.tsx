@@ -19,6 +19,7 @@ import { CommentsSidebar } from "./CommentsSidebar";
 import { Icon } from "../ui/Icon";
 import { api, type Client } from "../lib/api";
 import { formatearFecha } from "../lib/formatoFechas";
+import { formatCuit } from "../lib/cuit";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import {
@@ -782,7 +783,7 @@ export function StudyExpedienteMensual() {
       <div className="study-page">
         <EmptyState
           title="Elegí un cliente"
-          description="El legajo se organiza dentro de un cliente explícito."
+          description="Elegí un cliente en el menú lateral para ver su Legajo."
         />
       </div>
     );
@@ -1361,26 +1362,6 @@ export function StudyExpedienteMensual() {
       }
       motivos.push(errorDe(finalizeMutation.variables === wp.id ? finalizeMutation.error : null, "error-finalizar"));
     }
-    if (wp.status === "FINALIZED" && safeActiveStep !== 5 && capabilities.has("tax.settlements.rectify")) {
-      accion = (
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={rectifyMutation.isPending}
-          onClick={() =>
-            confirmar({
-              title: "Crear rectificativa",
-              description:
-                "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
-              confirmLabel: "Sí, crear rectificativa",
-              onConfirm: () => rectifyMutation.mutate(wp.id),
-            })
-          }
-        >
-          Crear rectificativa
-        </Button>
-      );
-    }
     if (wp.status === "FINALIZED") {
       motivos.push(errorDe(rectifyMutation.variables === wp.id ? rectifyMutation.error : null, "error-rectificar"));
     }
@@ -1397,6 +1378,32 @@ export function StudyExpedienteMensual() {
 
   // Solo la revisión vigente tiene acciones del legajo; una revisión anterior no escribe nada.
   const acciones = vigente && !soloLectura ? armarAccionesLegajo(vigente) : null;
+  // 09-3: «Crear rectificativa» vive en el menú de acciones (la barra no se amontona a 1280 px).
+  const puedeRectificar = Boolean(
+    vigente && !soloLectura && vigente.status === "FINALIZED" && capabilities.has("tax.settlements.rectify"),
+  );
+  const itemsMasAcciones: MenuActionItem[] = [
+    ...accionesDelPeriodo,
+    ...(puedeRectificar && vigente
+      ? [
+          {
+            key: "crear-rectificativa",
+            label: "Crear rectificativa",
+            description: "Abre una revisión nueva para corregir el mes finalizado.",
+            icon: "plus" as const,
+            disabled: rectifyMutation.isPending,
+            onSelect: () =>
+              confirmar({
+                title: "Crear rectificativa",
+                description:
+                  "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
+                confirmLabel: "Sí, crear rectificativa",
+                onConfirm: () => rectifyMutation.mutate(vigente.id),
+              }),
+          },
+        ]
+      : []),
+  ];
   const motivoEtapaSaldos =
     !soloLectura && vigente && safeActiveStep === 0 && !capabilities.has("tax.settlements.calculate")
       ? "Tu rol no puede cargar saldos iniciales."
@@ -1503,8 +1510,18 @@ export function StudyExpedienteMensual() {
             : ""
         }`;
 
+  const razonSocial = clientQuery.data?.legalName;
   const contexto = (
     <>
+      {razonSocial ? (
+        <span
+          className="work-bar__cliente"
+          title={`${razonSocial}${clientQuery.data?.cuit ? ` · CUIT ${formatCuit(clientQuery.data.cuit)}` : ""}`}
+        >
+          <strong>{razonSocial}</strong>
+          {clientQuery.data?.cuit ? <span className="muted-copy"> · CUIT {formatCuit(clientQuery.data.cuit)}</span> : null}
+        </span>
+      ) : null}
       {selectableTaxPeriods.length > 0 ? (
         <SearchSelect
           hideLabel
@@ -1519,14 +1536,14 @@ export function StudyExpedienteMensual() {
         />
       ) : null}
       {selectedTaxPeriod ? (
-        <span className="muted-copy" aria-live="polite">
+        <span className="muted-copy work-bar__vence" aria-live="polite">
           {positionQuery.isLoading ? (
             "Cargando vencimiento…"
           ) : dueDateForSelectedTax ? (
             `Vence el ${formatearFecha(dueDateForSelectedTax)}`
           ) : (
             <>
-              Sin vencimiento cargado{" "}
+              <span>Sin vencimiento cargado</span>
               <Button size="sm" variant="text" onClick={() => navigate("/calendarios-fiscales")}>
                 Calendarios
               </Button>
@@ -1534,14 +1551,14 @@ export function StudyExpedienteMensual() {
           )}
         </span>
       ) : null}
-      <Menu kind="actions" label="Acciones del período" trigger="Acciones del período" items={accionesDelPeriodo} />
+      <Menu kind="actions" label="Acciones del período" trigger="Más acciones" items={itemsMasAcciones} />
       {seleccionada ? (
         <>
           <span className="work-bar__separador" aria-hidden="true" />
           <Menu
             kind="select"
             label="Revisiones del período"
-            trigger={`Revisión ${seleccionada.revision}`}
+            trigger={`Revisión ${seleccionada.revision} de ${vigente?.revision ?? seleccionada.revision}`}
             value={seleccionada.id}
             options={workpapers.map((wp, indice) => ({
               key: wp.id,

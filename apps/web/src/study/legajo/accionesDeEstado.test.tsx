@@ -130,7 +130,7 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     ["CALCULATED", ["Enviar a revisión"]],
     ["IN_REVIEW", ["Solicitar cambios", "Aprobar revisión"]],
     ["REVIEWED", ["Finalizar"]],
-    ["FINALIZED", ["Crear rectificativa"]],
+    ["FINALIZED", []], // 09-3: «Crear rectificativa» pasó al menú «Más acciones»
   ];
 
   it.each(estados)("en %s muestra solo las acciones de su etapa", async (estado, esperadas) => {
@@ -265,7 +265,8 @@ describe("Legajo · acciones de estado de la tarjeta (K14)", () => {
     contexto(TODAS);
     renderLegajos([legajoDemo("FINALIZED")]);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Crear rectificativa" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Más acciones" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Crear rectificativa/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Sí, crear rectificativa" }));
     await waitFor(() =>
       expect(api.post).toHaveBeenCalledWith(

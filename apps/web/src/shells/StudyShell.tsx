@@ -221,6 +221,7 @@ export function StudyShell() {
               <span className="study__client-switcher-label">Cliente en el que estás trabajando</span>
               <SearchSelect
                 hideLabel
+                allowEmpty={!clientId}
                 label="Cliente en el que estás trabajando"
                 className="study__client-select"
                 value={clientId ?? ""}
