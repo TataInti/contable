@@ -976,6 +976,7 @@ export function StudyExpedienteMensual() {
             calculateInterestMutation={calculateInterestMutation}
             seleccion={seleccionDe(wp.id)}
             onSeleccionChange={(seleccion) => actualizarSeleccion(wp.id, seleccion)}
+            legajoFinalizado={wp.status === "FINALIZED"}
             bloqueoSeleccion={
               wp.status === "IN_REVIEW"
                 ? "Está en revisión: solicitá cambios para modificar los impuestos o el mínimo."

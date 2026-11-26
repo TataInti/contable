@@ -31,6 +31,8 @@ export interface EtapaCalculoProps {
   onSeleccionChange: (seleccion: SeleccionCalculo) => void;
   /** 4K: motivo por el que la selección no puede cambiar (p. ej. en revisión); deshabilita los campos. */
   bloqueoSeleccion?: string | null;
+  /** Legajo finalizado: el mínimo del mes se muestra como lectura. */
+  legajoFinalizado?: boolean;
 }
 
 export function EtapaCalculo({
@@ -42,6 +44,7 @@ export function EtapaCalculo({
   seleccion,
   onSeleccionChange,
   bloqueoSeleccion = null,
+  legajoFinalizado = false,
 }: EtapaCalculoProps) {
   const determinacion = calculationQuery.data ?? [];
   const etiquetas = etiquetasCortas(determinacion.map((component) => component.obligation));
@@ -93,7 +96,9 @@ export function EtapaCalculo({
           ) : null}
           {determinacion.map((component) => {
             const marcado = seleccionDeImpuesto(seleccion, component.obligationId);
-            const valor = seleccion.minimums[component.obligationId] ?? "";
+            // En período finalizado se muestra el mínimo usado en la liquidación, deshabilitado.
+            const minimoUsado = legajoFinalizado ? component.settlement?.minimo?.amount : undefined;
+            const valor = seleccion.minimums[component.obligationId] || minimoUsado || "";
             const error = marcado ? errorMinimo(valor) : null;
             return (
               <div className="workpaper-calculation-selection__row" key={`sel-${component.obligationId}`}>
@@ -116,7 +121,7 @@ export function EtapaCalculo({
                     <MoneyField
                       label="Mínimo del mes"
                       name={`minimo-${component.obligationId}`}
-                      disabled={Boolean(bloqueoSeleccion)}
+                      disabled={Boolean(bloqueoSeleccion) || legajoFinalizado}
                       value={valor}
                       error={error ?? undefined}
                       hint={component.minimoAnterior ? `El mes anterior usaste ${formatMoney(component.minimoAnterior.amount)}. No se aplica solo.` : undefined}
@@ -127,7 +132,6 @@ export function EtapaCalculo({
                         })
                       }
                     />
-                    <span className="workpaper-help-mark" title="Dejalo vacío si no corresponde mínimo: en ese caso no se aplica ninguno." aria-label="Ayuda sobre el mínimo del mes">?</span>
                   </div>
                 ) : null}
               </div>
