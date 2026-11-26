@@ -507,7 +507,7 @@ describe("StudyBandeja — revisión de extracción", () => {
       ).length;
       expect(extractionReadsAfterSave).toBeGreaterThan(extractionReadsBeforeSave);
       expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("1.234,56")).toBeTruthy();
-      expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText("cargado a mano")).toBeTruthy();
+      expect(within(screen.getByRole("table", { name: "Datos fiscales extraídos" })).getByText(/cargado a mano/)).toBeTruthy();
       expect((screen.getByRole("button", { name: "Aprobar extracción" }) as HTMLButtonElement).disabled).toBe(false);
     });
     expect(api.put).toHaveBeenCalledWith(

@@ -199,7 +199,7 @@ export function ControlCuitBloque({
         {cantidad === 1 ? "Hay 1 comprobante" : `Hay ${cantidad} comprobantes`} con el CUIT pendiente
         {cantidad <= 3 ? `: ${plan.pendientes.map((documento) => documentFileName(documento)).join(", ")}` : ""}.
       </p>
-      <div className="review-actions__buttons">
+      <div className="review-actions__buttons cuit-control__mover">
         {plan.destino ? (
           <Button
             disabled={ocupado}
@@ -207,11 +207,11 @@ export function ControlCuitBloque({
               void ejecutar(
                 (documento) =>
                   api.post(`${base}/documents/${documento.id}/cuit/move`, { clientId: plan.destino!.clientId }),
-                `Se movieron ${cantidad} comprobantes a ${plan.destino!.legalName}.`,
+                `${cantidad === 1 ? "Se movió 1 comprobante" : `Se movieron ${cantidad} comprobantes`} a ${plan.destino!.legalName}.`,
               )
             }
           >
-            {`Mover los ${cantidad} a ${plan.destino.legalName}`}
+            {`${cantidad === 1 ? "Mover 1 comprobante" : `Mover ${cantidad} comprobantes`} a ${plan.destino.legalName}`}
           </Button>
         ) : null}
       </div>
@@ -224,15 +224,16 @@ export function ControlCuitBloque({
           if (problema) return;
           void ejecutar(
             (documento) => api.post(`${base}/documents/${documento.id}/cuit/accept`, { reason: motivo.trim() }),
-            `Se aceptaron ${cantidad} comprobantes con motivo.`,
+            cantidad === 1 ? "Se aceptó 1 comprobante con motivo." : `Se aceptaron ${cantidad} comprobantes con motivo.`,
           );
           setMotivo("");
         }}
       >
-        <label htmlFor="cuit-motivo-bloque">Motivo para aceptarlos</label>
+        <label htmlFor="cuit-motivo-bloque">{cantidad === 1 ? "Motivo para aceptarlo" : "Motivo para aceptarlos"}</label>
         <input
           id="cuit-motivo-bloque"
           value={motivo}
+          placeholder="Por ejemplo: comprobantes a nombre de un socio"
           onChange={(event) => {
             setMotivo(event.target.value);
             setErrorMotivo(null);
