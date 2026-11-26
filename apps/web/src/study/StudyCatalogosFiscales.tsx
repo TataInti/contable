@@ -1715,9 +1715,32 @@ export function StudyCatalogosFiscales() {
         onClose={() => setActivityDrawer(null)}
         title="Editar actividad económica"
         description="Actualizá el código, la jurisdicción, la fuente o la vigencia de la actividad."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              form="activity-edit-form"
+              loading={updateActivity.isPending}
+              disabled={
+                !activityForm.code.trim() ||
+                !activityCodeValid ||
+                !activityForm.name.trim() ||
+                !activityForm.jurisdictionId ||
+                !activityForm.validFrom ||
+                !activityValidityValid
+              }
+            >
+              Guardar cambios
+            </Button>
+          </>
+        }
       >
         {editingActivity ? (
           <form
+            id="activity-edit-form"
             className="study-form study-form--compact dense-form"
             onSubmit={(event) => {
               event.preventDefault();
@@ -1801,25 +1824,6 @@ export function StudyCatalogosFiscales() {
               }
             />
             <MutationError error={updateActivity.error} />
-            <div className="study-form__actions">
-              <Button
-                type="submit"
-                loading={updateActivity.isPending}
-                disabled={
-                  !activityForm.code.trim() ||
-                  !activityCodeValid ||
-                  !activityForm.name.trim() ||
-                  !activityForm.jurisdictionId ||
-                  !activityForm.validFrom ||
-                  !activityValidityValid
-                }
-              >
-                Guardar cambios
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
-                Cancelar
-              </Button>
-            </div>
           </form>
         ) : null}
       </ActionDrawer>
@@ -1829,9 +1833,20 @@ export function StudyCatalogosFiscales() {
         onClose={() => setActivityDrawer(null)}
         title="Ocultar actividad económica"
         description="El registro, sus vínculos y reglas se conservan. La actividad deja de ofrecerse en los selectores."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
+              Cancelar
+            </Button>
+            <Button type="submit" form="activity-deactivate-form" loading={toggleActivity.isPending}>
+              Ocultar
+            </Button>
+          </>
+        }
       >
         {editingActivity ? (
           <form
+            id="activity-deactivate-form"
             className="study-form study-form--compact"
             onSubmit={(event) => {
               event.preventDefault();
@@ -1842,14 +1857,6 @@ export function StudyCatalogosFiscales() {
               ¿Ocultamos <strong>{editingActivity.code}</strong> — {editingActivity.name}?
             </p>
             <MutationError error={toggleActivity.error} />
-            <div className="study-form__actions">
-              <Button type="submit" loading={toggleActivity.isPending}>
-                Ocultar
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setActivityDrawer(null)}>
-                Cancelar
-              </Button>
-            </div>
           </form>
         ) : null}
       </ActionDrawer>
@@ -2125,9 +2132,16 @@ export function StudyCatalogosFiscales() {
         onClose={() => setMasterDrawer(null)}
         title="Editar tipo de impuesto"
         description="Actualizá el código o el nombre del tipo de impuesto."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
+            <Button type="submit" form="tax-type-edit-form" loading={updateTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Guardar cambios</Button>
+          </>
+        }
       >
         {editingTaxType ? (
           <form
+            id="tax-type-edit-form"
             className="study-form study-form--compact dense-form"
             onSubmit={(event) => {
               event.preventDefault();
@@ -2153,10 +2167,6 @@ export function StudyCatalogosFiscales() {
               required
             />
             <MutationError error={updateTaxType.error} />
-            <div className="study-form__actions">
-              <Button type="submit" loading={updateTaxType.isPending} disabled={!taxTypeForm.code.trim() || !taxTypeForm.name.trim()}>Guardar cambios</Button>
-              <Button type="button" variant="ghost" onClick={() => setMasterDrawer(null)}>Cancelar</Button>
-            </div>
           </form>
         ) : null}
       </ActionDrawer>
