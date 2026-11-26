@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClientContextValue } from "../../context/ClientContext";
 import { api, type ClientSummary } from "../../lib/api";
 import { StudyResumenCliente } from "../StudyResumenCliente";
-import { abrirListado, cambiarValor } from "../../test/elegirOpcion";
+import { cambiarValor } from "../../test/elegirOpcion";
 
 const contextMock = vi.hoisted(() => ({ current: null as unknown as ClientContextValue }));
 
