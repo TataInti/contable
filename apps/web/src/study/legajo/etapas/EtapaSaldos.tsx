@@ -52,6 +52,11 @@ const esSinImporte = (lot: CreditLot) =>
   lot.movements.length === 0 &&
   (lot.history ?? []).length === 0;
 
+/** «TEM San Miguel de Tucumán» → «TEM San Miguel», como en el resto de la app. */
+function nombreCortoImpuesto(nombre: string | undefined): string | undefined {
+  return nombre?.replace(/^(TEM San Miguel) de Tucumán$/, "$1");
+}
+
 /** Mes anterior al del legajo, en palabras («septiembre de 2026»). */
 function nombreMesAnterior(periodoInicio: string | undefined): string {
   if (!periodoInicio) return "el mes anterior";
@@ -115,7 +120,7 @@ export function EtapaSaldos({
           header: "Impuesto",
           render: (lot) => (
             <>
-              <strong>{lot.taxType?.name ?? lot.kind.replaceAll("_", " ")}</strong>
+              <strong>{nombreCortoImpuesto(lot.taxType?.name) ?? lot.kind.replaceAll("_", " ")}</strong>
               {lot.taxType ? (
                 <>
                   <br />
@@ -138,11 +143,6 @@ export function EtapaSaldos({
               ) : null}
             </>
           ),
-        },
-        {
-          key: "scope",
-          header: "Alcance",
-          render: (lot) => (lot.regimeId ? "Régimen específico" : "Impuesto"),
         },
         {
           key: "original",

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, EmptyState, Notice, SearchSelect } from "@contable/design-system";
@@ -62,6 +63,7 @@ const ROLES_TODO_EL_ESTUDIO = ["OWNER", "ADMIN"];
 const MOTIVO_CLAVE = "motivo";
 const MOTIVO_SIN_ASIGNACIONES = "sin-asignaciones";
 const ID_RANGO = "panel-trabajo-rango-error";
+const ID_MAS_FILTROS = "panel-trabajo-mas-filtros";
 
 export function StudyPanelTrabajo() {
   const { firmId, capabilities, setClientId, clientId } = useClientContext();
@@ -100,6 +102,10 @@ export function StudyPanelTrabajo() {
     setUltimoValido(filtros);
   }
   const consultaFiltros = rangoValido ? filtros : ultimoValido;
+  // 06-3: terminación y fechas viven en «Más filtros»; abre solo si ya hay un criterio ahí.
+  const [masFiltros, setMasFiltros] = useState(
+    () => filtros.terminacion.length > 0 || filtros.desde !== "" || filtros.hasta !== "",
+  );
 
   const consulta = useInfiniteQuery({
     queryKey: ["panel-trabajo", firmId, escribirFiltros(consultaFiltros).toString()],
@@ -179,26 +185,59 @@ export function StudyPanelTrabajo() {
     if (consulta.data !== undefined) return numero;
     return consulta.isError ? "no disponible" : "pendiente";
   };
+  // 06-6: los contadores son filtros. «Vencidas» y «Vencen esta semana» acotan el vencimiento
+  // respecto de la fecha de referencia de la API; los otros dos filtran por estado.
+  const hoy = asOfConocido;
+  const rangoVencidas = hoy !== null ? { desde: "", hasta: sumarDias(hoy, -1) } : null;
+  const rangoSemana = hoy !== null ? { desde: hoy, hasta: sumarDias(hoy, 7) } : null;
+  const filtroSinFechas = (actual: FiltrosPanel): FiltrosPanel => ({ ...actual, desde: "", hasta: "" });
+  const conRango = (rango: { desde: string; hasta: string } | null): Pick<StatItem, "pressed" | "onSelect"> =>
+    !puedeLeer || rango === null
+      ? {}
+      : {
+          pressed: filtros.desde === rango.desde && filtros.hasta === rango.hasta,
+          onSelect: () =>
+            cambiarFiltros((actual) =>
+              actual.desde === rango.desde && actual.hasta === rango.hasta
+                ? filtroSinFechas(actual)
+                : { ...actual, estado: "", ...rango },
+            ),
+        };
+  const conEstado = (estado: string): Pick<StatItem, "pressed" | "onSelect"> =>
+    puedeLeer
+      ? {
+          pressed: filtros.estado === estado,
+          onSelect: () =>
+            cambiarFiltros((actual) => ({
+              ...actual,
+              estado: actual.estado === estado ? "" : estado,
+            })),
+        }
+      : {};
   const indicadoresItems: StatItem[] = [
     {
       key: "vencidas",
       label: "Vencidas",
       value: valorIndicador(indicadores.vencidas),
+      ...conRango(rangoVencidas),
     },
     {
       key: "semana",
       label: "Vencen esta semana",
       value: valorIndicador(indicadores.semana),
+      ...conRango(rangoSemana),
     },
     {
       key: "sin-legajo",
       label: "Sin legajo",
       value: valorIndicador(indicadores.sinLegajo),
+      ...conEstado("SIN_LEGAJO"),
     },
     {
       key: "dj-pendientes",
       label: "DJ pendientes",
       value: valorIndicador(indicadores.djPendientes),
+      ...conEstado("DJ_PENDIENTE"),
     },
   ];
 
@@ -224,7 +263,10 @@ export function StudyPanelTrabajo() {
       title={errorInfo.titulo}
       action={
         errorInfo.demasiadas ? (
-          <Button size="sm" variant="secondary" onClick={() => desdeRef.current?.focus()}>
+          <Button size="sm" variant="secondary" onClick={() => {
+              flushSync(() => setMasFiltros(true));
+              desdeRef.current?.focus();
+            }}>
             Acotar el rango de vencimiento
           </Button>
         ) : (
@@ -238,18 +280,12 @@ export function StudyPanelTrabajo() {
     </Notice>
   ) : null;
 
+  // 06-5: una línea de texto neutro; «Volver a mis obligaciones» es el valor «Mis obligaciones» del filtro Responsable.
   const avisoMotivo =
     verTodoPorRol && searchParams.get(MOTIVO_CLAVE) === MOTIVO_SIN_ASIGNACIONES ? (
-      <Notice
-        tone="info"
-        action={
-          <Button size="sm" variant="secondary" onClick={quitarFiltros}>
-            Volver a mis obligaciones
-          </Button>
-        }
-      >
+      <p className="dense-dim">
         No hay obligaciones asignadas a vos en esta vista: ves todo el estudio por tu rol.
-      </Notice>
+      </p>
     ) : null;
 
   const columnas: DenseColumn<TaxPanelRow>[] = [
@@ -320,8 +356,8 @@ export function StudyPanelTrabajo() {
     },
     {
       key: "accion",
-      header: <span className="sr-only">Acciones</span>,
-      width: "10%",
+      header: "Acciones",
+      width: "11%",
       sticky: "right",
       render: (fila) => (
         <Button
@@ -400,6 +436,7 @@ export function StudyPanelTrabajo() {
         }}
         empty={vacio}
         footer={
+          consulta.hasNextPage || paginas.length > 1 || (consulta.isFetching && !consulta.isLoading) ? (
           <>
             <span>
               {filas.length} de {total} {total === 1 ? "obligación" : "obligaciones"}
@@ -418,6 +455,7 @@ export function StudyPanelTrabajo() {
               <span role="status">Actualizando…</span>
             ) : null}
           </>
+          ) : undefined
         }
       />
     );
@@ -459,20 +497,9 @@ export function StudyPanelTrabajo() {
               allowEmpty={false}
               options={[
                 { value: RESPONSABLE_MIS, label: "Responsable: Mis obligaciones" },
-                { value: RESPONSABLE_TODOS, label: "Responsable: Todo el estudio" },
+                { value: RESPONSABLE_TODOS, label: "Responsable: todos" },
                 ...responsables.map((opcion) => ({ value: opcion.value, label: `Responsable: ${opcion.label}` })),
               ]}
-            />
-          </div>
-          <div className="panel-trabajo__filtro panel-trabajo__filtro--terminacion">
-            <span className="dense-dim">Terminación de CUIT</span>
-            <DenseToggleGroup
-              label="Terminación de CUIT"
-              options={CUIT_ENDINGS.map((digito) => ({ value: digito, label: digito }))}
-              selected={filtros.terminacion}
-              onChange={(siguiente) =>
-                cambiarFiltros((actual) => ({ ...actual, terminacion: siguiente }))
-              }
             />
           </div>
           <div className="panel-trabajo__filtro panel-trabajo__filtro--impuesto">
@@ -486,8 +513,6 @@ export function StudyPanelTrabajo() {
               options={impuestos.map((opcion) => ({ value: opcion.value, label: `Impuesto: ${opcion.label}` }))}
             />
           </div>
-        </div>
-        <div className="panel-trabajo__fila">
           <div className="panel-trabajo__filtro panel-trabajo__filtro--estado">
             <SearchSelect
               hideLabel
@@ -508,6 +533,33 @@ export function StudyPanelTrabajo() {
               onChange={(value) => cambiarFiltros((actual) => ({ ...actual, periodo: value }))}
               placeholder="Período fiscal: todos"
               options={periodos.map((opcion) => ({ value: opcion.value, label: `Período fiscal: ${opcion.label}` }))}
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-expanded={masFiltros}
+            aria-controls={ID_MAS_FILTROS}
+            onClick={() => setMasFiltros((abierto) => !abierto)}
+          >
+            Más filtros
+          </Button>
+          {hayFiltros ? (
+            <Button size="sm" variant="ghost" onClick={quitarFiltros}>
+              Quitar filtros
+            </Button>
+          ) : null}
+        </div>
+        <div className="panel-trabajo__fila" id={ID_MAS_FILTROS} hidden={!masFiltros}>
+          <div className="panel-trabajo__filtro panel-trabajo__filtro--terminacion">
+            <span className="dense-dim">Terminación de CUIT</span>
+            <DenseToggleGroup
+              label="Terminación de CUIT"
+              options={CUIT_ENDINGS.map((digito) => ({ value: digito, label: digito }))}
+              selected={filtros.terminacion}
+              onChange={(siguiente) =>
+                cambiarFiltros((actual) => ({ ...actual, terminacion: siguiente }))
+              }
             />
           </div>
           <div className="panel-trabajo__fechas">
@@ -546,13 +598,6 @@ export function StudyPanelTrabajo() {
               </span>
             )}
           </div>
-          {hayFiltros ? (
-            <div className="panel-trabajo__filtro">
-              <Button size="sm" variant="ghost" onClick={quitarFiltros}>
-                Quitar filtros
-              </Button>
-            </div>
-          ) : null}
         </div>
       </DenseToolbar>
       {avisoError}

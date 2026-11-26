@@ -9,6 +9,8 @@ import { formatearFechaHora } from "../../../lib/formatoFechas";
 import { WorkpaperActionError } from "../WorkpaperActionError";
 import { estadoDeLote, ladoDeLibroIva, LoteConFilasObservadas, type ResultadoImportacionLote } from "../loteFuente";
 import { DetalleFilasLote } from "../DetalleFilasLote";
+import { explicacionFuente, nombreFuente } from "../nombreFuente";
+import { ZonaArchivo } from "../ZonaArchivo";
 import { avisoDeFuenteEquivocada, FUENTE_DE_TXT_DGR, tipoDeTxtDgrTucuman } from "../txtDgrTucuman";
 import type { WorkpaperSource } from "../tipos";
 import type { UseMutationResult } from "@tanstack/react-query";
@@ -136,7 +138,7 @@ export function PanelGestionarFuente({
       const deOtraFuente = avisoDeFuenteEquivocada(sourceFile.name, source, sources);
       const texto = await sourceFile.text();
       if (!activo) return;
-      setReconocimiento(`Es un archivo de ${NOMBRES_TIPO_DGR[tipo]}. ¿Cargarlo en ${destino?.label ?? "Ingresos Brutos Tucumán"}?`);
+      setReconocimiento(`Es un archivo de ${NOMBRES_TIPO_DGR[tipo]}. ¿Cargarlo en ${destino?.label ?? "Retenciones y percepciones IIBB Tucumán"}?`);
       setAvisoFuente(deOtraFuente);
       if (texto.length === 0) setAvisoFuente("El archivo está vacío. Elegí un archivo con datos.");
     }
@@ -189,7 +191,7 @@ export function PanelGestionarFuente({
       isOpen={isOpen}
       onClose={onClose}
       title="Gestionar fuente"
-      description={source.label}
+      description={nombreFuente(source)}
       size="default"
       footer={(
         <>
@@ -202,7 +204,9 @@ export function PanelGestionarFuente({
       {vista === "archivos" ? (
         <section aria-label="Archivos">
           <h3>Archivos</h3>
+          {sourceUploadMutation.data?.avisos.map((aviso) => <p role="status" key={aviso}>{aviso}</p>)}
           <p>{nombreEstado}</p>
+          {explicacionFuente(source) ? <p className="muted-copy">{explicacionFuente(source)}</p> : null}
           {canEdit && calculado ? (
             <p role="status">En un mes calculado, cargar, reemplazar o retirar un archivo deja el cálculo desactualizado: hay que recalcular. Marcar o deshacer «Sin movimientos» también lo invalida.</p>
           ) : null}
@@ -271,7 +275,6 @@ export function PanelGestionarFuente({
             ))}
           </ul>
           <WorkpaperActionError error={sourceUploadMutation.error} />
-          {sourceUploadMutation.data?.avisos.map((aviso) => <p role="status" key={aviso}>{aviso}</p>)}
         </section>
       ) : null}
       {vista === "errores" ? (
@@ -292,16 +295,12 @@ export function PanelGestionarFuente({
             <p>El libro de IVA se importa desde el archivo de ARCA.</p>
           ) : (
             <>
-              <label
-                className="workpaper-source-file-drop"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => { event.preventDefault(); aceptarArchivo(event.dataTransfer.files[0] ?? null); }}
-              >
-                <span>Elegir archivo</span>
-                <input type="file" accept=".csv,.txt,.json,text/csv,text/plain,application/json" onChange={(event) => aceptarArchivo(event.target.files?.[0] ?? null)} />
-              </label>
-              <p>Arrastrá un archivo hasta acá o elegilo.</p>
-              {sourceFile ? <p>{sourceFile.name}</p> : null}
+              <ZonaArchivo
+                archivo={sourceFile}
+                onArchivo={aceptarArchivo}
+                accept=".csv,.txt,.json,text/csv,text/plain,application/json"
+                ayuda="CSV, TXT o JSON"
+              />
               {reconocimiento ? <p role="status">{reconocimiento}</p> : null}
               {avisoFuente ? <p role="alert">{avisoFuente}</p> : null}
               {archivoEquivocado && fuenteCorrecta ? (

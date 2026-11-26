@@ -1,4 +1,5 @@
 import type { ClientSummary } from "../../../lib/api";
+import { formatCuit } from "../../../lib/cuit";
 import { formatearFecha } from "../../../lib/formatoFechas";
 import { DenseSection } from "../../../ui/Dense";
 import { StatusBadge } from "../../../ui/StatusBadge";
@@ -23,7 +24,7 @@ export function SeccionPerfilFiscal({ activeProfile, fiscal }: Props) {
         <>
           <dl className="client-summary__facts">
             <SummaryFact label="Razón social fiscal" value={activeProfile.legalName} />
-            <SummaryFact label="CUIT fiscal" value={activeProfile.cuit} />
+            <SummaryFact label="CUIT fiscal" value={formatCuit(activeProfile.cuit)} />
             <SummaryFact label="Tipo de persona" value={PERSON_TYPE_LABELS[activeProfile.personType] ?? activeProfile.personType} />
             <SummaryFact label="Condición nacional" value={CONDITION_LABELS[activeProfile.nationalCondition] ?? activeProfile.nationalCondition} />
             <SummaryFact label="Versión" value={`v${activeProfile.version}`} />

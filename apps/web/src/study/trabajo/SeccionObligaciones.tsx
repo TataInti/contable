@@ -1,5 +1,5 @@
 import type { UseQueryResult } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, Table } from "@contable/design-system";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { formatearFecha } from "../../lib/formatoFechas";
 import type { ClientContextValue } from "../../context/ClientContext";
@@ -8,7 +8,10 @@ import type { FilaObligacion } from "./obligaciones";
 
 interface SeccionObligacionesProps {
   obligations: UseQueryResult<Obligation[], Error>;
+  /** Solo las obligaciones sin pagar. */
   obligationRows: FilaObligacion[];
+  /** Hay obligaciones en el período y todas están pagadas. */
+  allPaid: boolean;
   capabilities: ClientContextValue["capabilities"];
   navigate: (ruta: string) => void;
   /** Entra al Legajo con el cliente, el mes y el impuesto de la obligación ya elegidos. */
@@ -18,29 +21,15 @@ interface SeccionObligacionesProps {
 export function SeccionObligaciones({
   obligations,
   obligationRows,
+  allPaid,
   capabilities,
   navigate,
   abrirLegajo,
 }: SeccionObligacionesProps) {
-  // Sin obligaciones, la sección es una línea con la acción que la resuelve.
-  if (!obligations.isLoading && !obligations.isError && obligationRows.length === 0) {
-    return (
-      <section className="work-line" id="work-obligations-section">
-        <h2>Próximas obligaciones</h2>
-        <span className="section-count">0</span>
-        <span className="work-line__hint">Sin vencimientos configurados para este cliente.</span>
-        {capabilities.has("tax.profile.write") ? (
-          <Button size="sm" variant="ghost" onClick={() => navigate("/configuracion-fiscal")}>
-            Configurar obligaciones
-          </Button>
-        ) : null}
-      </section>
-    );
-  }
   return (
     <>
-      <section className="study-page__section" id="work-obligations-section">
-        <div className="section-heading">
+      <section className="study-panel" id="work-obligations-section">
+        <div className="study-panel__heading">
           <div>
             <h2>Próximas obligaciones</h2>
           </div>
@@ -65,7 +54,8 @@ export function SeccionObligaciones({
               },
               {
                 key: "legajo",
-                header: <span className="sr-only">Acciones</span>,
+                header: "Acción",
+                align: "right",
                 render: (row) => (
                   <Button
                     size="sm"
@@ -80,22 +70,17 @@ export function SeccionObligaciones({
             ]}
           />
         ) : (
-          <EmptyState
-            size="compact"
-            title="Sin obligaciones materializadas"
-            description="No hay vencimientos configurados para este contexto."
-            action={
-              capabilities.has("tax.profile.write") ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => navigate("/configuracion-fiscal")}
-                >
+          <p className="empty-line">
+            <span>{allPaid ? "Todo al día · las obligaciones de este período están pagadas" : "Sin vencimientos configurados"}</span>
+            {capabilities.has("tax.profile.write") && !allPaid ? (
+              <>
+                <span aria-hidden="true"> · </span>
+                <Button size="sm" variant="ghost" onClick={() => navigate("/configuracion-fiscal")}>
                   Configurar obligaciones
                 </Button>
-              ) : undefined
-            }
-          />
+              </>
+            ) : null}
+          </p>
         )}
       </section>
     </>

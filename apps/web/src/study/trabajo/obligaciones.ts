@@ -1,4 +1,4 @@
-import { formatearRango } from "../../lib/formatoFechas";
+import { formatearPeriodo } from "../../lib/formatoFechas";
 import type { Obligation } from "./tipos";
 
 export interface FilaObligacion {
@@ -27,9 +27,7 @@ export function filasDeObligaciones(
     id: item.id,
     taxPeriodId: item.period.id,
     name: `${item.regime.taxType.name} · ${item.regime.jurisdiction.name}`,
-    periodLabel:
-      item.period.label ??
-      formatearRango(item.period.startDate, item.period.endDate),
+    periodLabel: formatearPeriodo(item.period.startDate, item.period.endDate),
     dueDate: item.dueDate ?? item.period.endDate,
     status: item.status,
     }));
