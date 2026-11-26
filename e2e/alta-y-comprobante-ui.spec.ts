@@ -24,8 +24,8 @@ const fixture = join(fixtures, "ticket-mesa-8.jpg");
 const sourceFiles = [
   { source: "Libro IVA Ventas", file: join(fixtures, "libro-iva-ventas-2025-03.json") },
   { source: "Libro IVA Compras", file: join(fixtures, "libro-iva-compras-2025-03.json") },
-  { source: "Ingresos Brutos Tucumán", file: join(fixtures, "iibb-tucuman-2025-03.json") },
-  { source: "TEM San Miguel de Tucumán", file: join(fixtures, "tem-san-miguel-2025-03.json") },
+  { source: "Base por actividad (IIBB Tucumán)", file: join(fixtures, "iibb-tucuman-2025-03.json") },
+  { source: "Base por actividad (TEM San Miguel)", file: join(fixtures, "tem-san-miguel-2025-03.json") },
 ];
 
 /**

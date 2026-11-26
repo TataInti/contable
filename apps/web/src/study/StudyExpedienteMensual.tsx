@@ -44,6 +44,7 @@ import type {
   WorkpaperCalculationComponent,
   WorkpaperClassification,
 } from "./legajo/tipos";
+import { Candado } from "./legajo/Candado";
 import {
   fiscalTaxPeriodLabel,
   fiscalTaxPeriodSelectionKey,
@@ -1464,7 +1465,7 @@ export function StudyExpedienteMensual() {
           coverageQuery.isFetching && coverageQuery.isSuccess ? "Actualizando…" : "Actualizar",
         )}
         <Button size="sm" variant="secondary" onClick={() => navigate("/bandeja")}>
-          Ir a bandeja
+          Subir PDF o foto (Bandeja)
         </Button>
       </>
     );
@@ -1561,11 +1562,25 @@ export function StudyExpedienteMensual() {
     </>
   );
 
+  // «Continuar» queda deshabilitado, con el motivo a la vista, mientras la etapa siguiente no esté disponible.
+  const motivoContinuar =
+    siguienteEtapa !== null && estadosEtapas[siguienteEtapa]?.estado === "No disponible todavía"
+      ? `${WORKPAPER_STEPS[siguienteEtapa]!.title} no está disponible todavía: ${(estadosEtapas[siguienteEtapa]?.mensaje ?? "faltan pasos previos").replace(/^./, (c) => c.toLowerCase())}.`
+      : null;
+
   const pestanas = WORKPAPER_STEPS.map((step, indice) => ({
     id: String(indice),
     description: `Estado: ${estadosEtapas[indice]?.estado ?? "No disponible todavía"}`,
     // 13-7: con bloqueantes abiertos el punto con número ya lo dice; no se repite «Con pendientes».
-    status: indice === 4 && bloqueantesAbiertos > 0 ? undefined : `${estadosEtapas[indice]?.estado === "Lista" ? "✓" : estadosEtapas[indice]?.estado === "Con pendientes" ? "!" : "·"} ${estadosEtapas[indice]?.estado ?? "No disponible todavía"}`,
+    status:
+      indice === 4 && bloqueantesAbiertos > 0 ? undefined :
+      estadosEtapas[indice]?.estado === "Lista" ? (
+        "✓"
+      ) : estadosEtapas[indice]?.estado === "Con pendientes" ? (
+        "! Con pendientes"
+      ) : (
+        <Candado motivo={estadosEtapas[indice]?.mensaje ?? null} />
+      ),
     label: (
       <>
         {step.title}
@@ -1723,9 +1738,10 @@ export function StudyExpedienteMensual() {
           {renderEtapa(seleccionada, safeActiveStep)}
           {textoContinuar && siguienteEtapa !== null ? (
             <div className="workpaper-continuar">
-              <Button variant={acciones?.accion ? "secondary" : "primary"} onClick={() => goToStep(siguienteEtapa)}>
+              <Button variant={acciones?.accion ? "secondary" : "primary"} disabled={motivoContinuar !== null} onClick={() => goToStep(siguienteEtapa)}>
                 {textoContinuar}
               </Button>
+              {motivoContinuar ? <small className="muted-copy" role="note">{motivoContinuar}</small> : null}
             </div>
           ) : null}
         </div>
@@ -1752,7 +1768,7 @@ export function StudyExpedienteMensual() {
                 <div className="workpaper-stage-toolbar" role="group" aria-label="Acciones de la etapa">
                   {accionesEtapa}
                   {seleccionada && textoContinuar && siguienteEtapa !== null ? (
-                    <Button size="sm" variant="secondary" onClick={() => goToStep(siguienteEtapa)}>
+                    <Button size="sm" variant="secondary" disabled={motivoContinuar !== null} title={motivoContinuar ?? undefined} onClick={() => goToStep(siguienteEtapa)}>
                       {textoContinuar}
                     </Button>
                   ) : null}
