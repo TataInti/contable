@@ -1553,6 +1553,14 @@
   text-align: start;
 }
 
+/* El nombre de un control puede ser largo: el título del cajón hace salto de línea en vez de cortarse con «…». */
+.action-drawer__panel:has([data-object-kind="control"]) .action-drawer__header h2 {
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .workpaper-controls .ds-empty--inline {
   padding-block: var(--ds-space-2);
 }

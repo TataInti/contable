@@ -69,10 +69,11 @@ export function EtapaControles({ capabilities, wp, controlResolutions, setContro
   }, [selected?.id, accionGrupo, accionControl]);
   const eligibleEvidenceDocuments = (documentsQuery.data ?? []).filter((document) => ["READY", "APPLIED", "REVIEWED"].includes(document.status));
   const open = wp.controls.filter((item) => item.status === "OPEN");
-  const resolved = wp.controls.filter((item) => item.status !== "OPEN");
+  // Un cálculo nuevo genera otro control con el mismo código: de los resueltos se muestra uno por código (el más reciente, primero en la lista de la API).
+  const resolved = wp.controls.filter((item) => item.status !== "OPEN").filter((item, index, lista) => lista.findIndex((otro) => otro.code === item.code) === index);
   // Controles cuya fuente no tiene datos: no bloquean y quedan visibles como «Omitido: …».
   // Un cálculo nuevo genera otro control con el mismo código: se muestra solo el más reciente de cada uno (la API los entrega del más nuevo al más viejo).
-  const omitidos = resolved.filter((item) => item.resolution?.startsWith("Omitido:")).filter((item, index, lista) => lista.findIndex((otro) => otro.code === item.code) === index);
+  const omitidos = resolved.filter((item) => item.resolution?.startsWith("Omitido:"));
   const juntos = open.filter((item) => item.severity === "BLOCKING" && !item.code.startsWith(PREFIJO_CONTROL_PERFIL));
   const resolverTodos = () => {
     if (!resolveOpenMutation || !motivoJuntos.trim()) return;
