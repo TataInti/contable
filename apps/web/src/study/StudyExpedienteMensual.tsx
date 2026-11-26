@@ -19,6 +19,7 @@ import { CommentsSidebar } from "./CommentsSidebar";
 import { Icon } from "../ui/Icon";
 import { api, type Client } from "../lib/api";
 import { formatearFecha } from "../lib/formatoFechas";
+import { formatCuit } from "../lib/cuit";
 import { useClientContext } from "../context/ClientContext";
 import { useSession } from "../session/SessionContext";
 import {
@@ -44,6 +45,7 @@ import type {
   WorkpaperCalculationComponent,
   WorkpaperClassification,
 } from "./legajo/tipos";
+import { Candado } from "./legajo/Candado";
 import {
   fiscalTaxPeriodLabel,
   fiscalTaxPeriodSelectionKey,
@@ -781,7 +783,7 @@ export function StudyExpedienteMensual() {
       <div className="study-page">
         <EmptyState
           title="Elegí un cliente"
-          description="El legajo se organiza dentro de un cliente explícito."
+          description="Elegí un cliente en el menú lateral para ver su Legajo."
         />
       </div>
     );
@@ -1030,7 +1032,7 @@ export function StudyExpedienteMensual() {
             onGoToControls={() => goToStep(4)}
             onFinalize={() => confirmar({
               title: "Finalizar el legajo",
-              description: "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
+              description: "Cierra el mes: ya no se podrá cambiar sin una rectificativa.",
               confirmLabel: "Sí, finalizar",
               onConfirm: () => finalizeMutation.mutate(wp.id),
             })}
@@ -1342,7 +1344,7 @@ export function StudyExpedienteMensual() {
             confirmar({
               title: "Finalizar el legajo",
               description:
-                "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
+                "Cierra el mes: ya no se podrá cambiar sin una rectificativa.",
               confirmLabel: "Sí, finalizar",
               onConfirm: () => finalizeMutation.mutate(wp.id),
             })
@@ -1360,26 +1362,6 @@ export function StudyExpedienteMensual() {
       }
       motivos.push(errorDe(finalizeMutation.variables === wp.id ? finalizeMutation.error : null, "error-finalizar"));
     }
-    if (wp.status === "FINALIZED" && safeActiveStep !== 5 && capabilities.has("tax.settlements.rectify")) {
-      accion = (
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={rectifyMutation.isPending}
-          onClick={() =>
-            confirmar({
-              title: "Crear rectificativa",
-              description:
-                "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
-              confirmLabel: "Sí, crear rectificativa",
-              onConfirm: () => rectifyMutation.mutate(wp.id),
-            })
-          }
-        >
-          Crear rectificativa
-        </Button>
-      );
-    }
     if (wp.status === "FINALIZED") {
       motivos.push(errorDe(rectifyMutation.variables === wp.id ? rectifyMutation.error : null, "error-rectificar"));
     }
@@ -1396,6 +1378,32 @@ export function StudyExpedienteMensual() {
 
   // Solo la revisión vigente tiene acciones del legajo; una revisión anterior no escribe nada.
   const acciones = vigente && !soloLectura ? armarAccionesLegajo(vigente) : null;
+  // 09-3: «Crear rectificativa» vive en el menú de acciones (la barra no se amontona a 1280 px).
+  const puedeRectificar = Boolean(
+    vigente && !soloLectura && vigente.status === "FINALIZED" && capabilities.has("tax.settlements.rectify"),
+  );
+  const itemsMasAcciones: MenuActionItem[] = [
+    ...accionesDelPeriodo,
+    ...(puedeRectificar && vigente
+      ? [
+          {
+            key: "crear-rectificativa",
+            label: "Crear rectificativa",
+            description: "Abre una revisión nueva para corregir el mes finalizado.",
+            icon: "plus" as const,
+            disabled: rectifyMutation.isPending,
+            onSelect: () =>
+              confirmar({
+                title: "Crear rectificativa",
+                description:
+                  "Abre una revisión nueva del período. La revisión actual queda finalizada y sin cambios.",
+                confirmLabel: "Sí, crear rectificativa",
+                onConfirm: () => rectifyMutation.mutate(vigente.id),
+              }),
+          },
+        ]
+      : []),
+  ];
   const motivoEtapaSaldos =
     !soloLectura && vigente && safeActiveStep === 0 && !capabilities.has("tax.settlements.calculate")
       ? "Tu rol no puede cargar saldos iniciales."
@@ -1464,7 +1472,7 @@ export function StudyExpedienteMensual() {
           coverageQuery.isFetching && coverageQuery.isSuccess ? "Actualizando…" : "Actualizar",
         )}
         <Button size="sm" variant="secondary" onClick={() => navigate("/bandeja")}>
-          Ir a bandeja
+          Subir PDF o foto (Bandeja)
         </Button>
       </>
     );
@@ -1502,8 +1510,18 @@ export function StudyExpedienteMensual() {
             : ""
         }`;
 
+  const razonSocial = clientQuery.data?.legalName;
   const contexto = (
     <>
+      {razonSocial ? (
+        <span
+          className="work-bar__cliente"
+          title={`${razonSocial}${clientQuery.data?.cuit ? ` · CUIT ${formatCuit(clientQuery.data.cuit)}` : ""}`}
+        >
+          <strong>{razonSocial}</strong>
+          {clientQuery.data?.cuit ? <span className="muted-copy"> · CUIT {formatCuit(clientQuery.data.cuit)}</span> : null}
+        </span>
+      ) : null}
       {selectableTaxPeriods.length > 0 ? (
         <SearchSelect
           hideLabel
@@ -1518,14 +1536,14 @@ export function StudyExpedienteMensual() {
         />
       ) : null}
       {selectedTaxPeriod ? (
-        <span className="muted-copy" aria-live="polite">
+        <span className="muted-copy work-bar__vence" aria-live="polite">
           {positionQuery.isLoading ? (
             "Cargando vencimiento…"
           ) : dueDateForSelectedTax ? (
             `Vence el ${formatearFecha(dueDateForSelectedTax)}`
           ) : (
             <>
-              Sin vencimiento cargado{" "}
+              <span>Sin vencimiento cargado</span>
               <Button size="sm" variant="text" onClick={() => navigate("/calendarios-fiscales")}>
                 Calendarios
               </Button>
@@ -1533,14 +1551,14 @@ export function StudyExpedienteMensual() {
           )}
         </span>
       ) : null}
-      <Menu kind="actions" label="Acciones del período" trigger="Acciones del período" items={accionesDelPeriodo} />
+      <Menu kind="actions" label="Acciones del período" trigger="Más acciones" items={itemsMasAcciones} />
       {seleccionada ? (
         <>
           <span className="work-bar__separador" aria-hidden="true" />
           <Menu
             kind="select"
             label="Revisiones del período"
-            trigger={`Revisión ${seleccionada.revision}`}
+            trigger={`Revisión ${seleccionada.revision} de ${vigente?.revision ?? seleccionada.revision}`}
             value={seleccionada.id}
             options={workpapers.map((wp, indice) => ({
               key: wp.id,
@@ -1561,10 +1579,25 @@ export function StudyExpedienteMensual() {
     </>
   );
 
+  // «Continuar» queda deshabilitado, con el motivo a la vista, mientras la etapa siguiente no esté disponible.
+  const motivoContinuar =
+    siguienteEtapa !== null && estadosEtapas[siguienteEtapa]?.estado === "No disponible todavía"
+      ? `${WORKPAPER_STEPS[siguienteEtapa]!.title} no está disponible todavía: ${(estadosEtapas[siguienteEtapa]?.mensaje ?? "faltan pasos previos").replace(/^./, (c) => c.toLowerCase())}.`
+      : null;
+
   const pestanas = WORKPAPER_STEPS.map((step, indice) => ({
     id: String(indice),
     description: `Estado: ${estadosEtapas[indice]?.estado ?? "No disponible todavía"}`,
-    status: `${estadosEtapas[indice]?.estado === "Lista" ? "✓" : estadosEtapas[indice]?.estado === "Con pendientes" ? "!" : "·"} ${estadosEtapas[indice]?.estado ?? "No disponible todavía"}`,
+    // 13-7: con bloqueantes abiertos el punto con número ya lo dice; no se repite «Con pendientes».
+    status:
+      indice === 4 && bloqueantesAbiertos > 0 ? undefined :
+      estadosEtapas[indice]?.estado === "Lista" ? (
+        "✓"
+      ) : estadosEtapas[indice]?.estado === "Con pendientes" ? (
+        "! Con pendientes"
+      ) : (
+        <Candado motivo={estadosEtapas[indice]?.mensaje ?? null} />
+      ),
     label: (
       <>
         {step.title}
@@ -1722,9 +1755,10 @@ export function StudyExpedienteMensual() {
           {renderEtapa(seleccionada, safeActiveStep)}
           {textoContinuar && siguienteEtapa !== null ? (
             <div className="workpaper-continuar">
-              <Button variant={acciones?.accion ? "secondary" : "primary"} onClick={() => goToStep(siguienteEtapa)}>
+              <Button variant={acciones?.accion ? "secondary" : "primary"} disabled={motivoContinuar !== null} onClick={() => goToStep(siguienteEtapa)}>
                 {textoContinuar}
               </Button>
+              {motivoContinuar ? <small className="muted-copy" role="note">{motivoContinuar}</small> : null}
             </div>
           ) : null}
         </div>
@@ -1751,7 +1785,7 @@ export function StudyExpedienteMensual() {
                 <div className="workpaper-stage-toolbar" role="group" aria-label="Acciones de la etapa">
                   {accionesEtapa}
                   {seleccionada && textoContinuar && siguienteEtapa !== null ? (
-                    <Button size="sm" variant="secondary" onClick={() => goToStep(siguienteEtapa)}>
+                    <Button size="sm" variant="secondary" disabled={motivoContinuar !== null} title={motivoContinuar ?? undefined} onClick={() => goToStep(siguienteEtapa)}>
                       {textoContinuar}
                     </Button>
                   ) : null}

@@ -626,7 +626,7 @@ describe("Legajo · etapa Cierre (K13)", () => {
     await abrirEtapa(/Cierre/);
 
     fireEvent.click(await screen.findByRole("button", { name: "Finalizar" }));
-    expect(await screen.findByText(/Finalizar congela los datos del período/)).toBeInTheDocument();
+    expect(await screen.findByText(/Cierra el mes: ya no se podrá cambiar sin una rectificativa/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sí, finalizar" })).toBeInTheDocument();
     expect(api.post).not.toHaveBeenCalledWith(expect.stringContaining("/finalize"), expect.anything());
   });

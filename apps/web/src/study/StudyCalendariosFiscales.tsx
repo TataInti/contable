@@ -1,7 +1,15 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { AsyncState, Button, EmptyState, Field, Notice, useNotify, SearchSelect } from "@contable/design-system";
+import {
+  AsyncState,
+  Button,
+  EmptyState,
+  Field,
+  Notice,
+  useNotify,
+  SearchSelect,
+} from "@contable/design-system";
 import { useClientContext } from "../context/ClientContext";
 import { api } from "../lib/api";
 import { formatearFecha } from "../lib/formatoFechas";
@@ -90,7 +98,8 @@ export function StudyCalendariosFiscales() {
     [list.data, filters.statuses],
   );
   const hasFilters = hasCalendarFilters(filters);
-  const statusSelection: readonly string[] = filters.statuses.length === 0 ? [TODOS_FILTER] : filters.statuses;
+  const statusSelection: readonly string[] =
+    filters.statuses.length === 0 ? [TODOS_FILTER] : filters.statuses;
 
   const openCalendar = (id: string) =>
     setSearchParams((previous) => {
@@ -106,21 +115,29 @@ export function StudyCalendariosFiscales() {
       return next;
     });
 
-  const updateFilters = (next: CalendarFilters) => setSearchParams(paramsWithFilters(searchParams, next));
+  const updateFilters = (next: CalendarFilters) =>
+    setSearchParams(paramsWithFilters(searchParams, next));
   const clearFilters = () => updateFilters(NO_CALENDAR_FILTERS);
 
   const authorityOptions = (catalogs.authorities.data ?? []).map((item: AuthorityOption) => ({
     value: item.id,
     label: item.name,
   }));
-  const jurisdictionOptions = (catalogs.jurisdictions.data ?? []).map((item: JurisdictionOption) => ({
-    value: item.id,
-    label: item.name,
-  }));
-  const currentYear = new Date().getFullYear();
-  const yearOptions = [...new Set([currentYear - 1, currentYear, currentYear + 1, ...(filters.year ? [filters.year] : [])])].sort(
-    (a, b) => a - b,
+  const jurisdictionOptions = (catalogs.jurisdictions.data ?? []).map(
+    (item: JurisdictionOption) => ({
+      value: item.id,
+      label: item.name,
+    }),
   );
+  const currentYear = new Date().getFullYear();
+  const yearOptions = [
+    ...new Set([
+      currentYear - 1,
+      currentYear,
+      currentYear + 1,
+      ...(filters.year ? [filters.year] : []),
+    ]),
+  ].sort((a, b) => a - b);
 
   const columns: ReadonlyArray<DenseColumn<CalendarListItem>> = [
     {
@@ -139,8 +156,20 @@ export function StudyCalendariosFiscales() {
       sortValue: (row) => row.jurisdiction.name,
       render: (row) => row.jurisdiction.name,
     },
-    { key: "year", header: "Año", align: "right", sortValue: (row) => row.year, render: (row) => row.year },
-    { key: "version", header: "Versión", align: "right", sortValue: (row) => row.version, render: (row) => row.version },
+    {
+      key: "year",
+      header: "Año",
+      align: "right",
+      sortValue: (row) => row.year,
+      render: (row) => row.year,
+    },
+    {
+      key: "version",
+      header: "Versión",
+      align: "right",
+      sortValue: (row) => row.version,
+      render: (row) => row.version,
+    },
     {
       key: "status",
       header: "Estado",
@@ -162,20 +191,21 @@ export function StudyCalendariosFiscales() {
     },
   ];
 
-  const headerActions = calendarId !== null ? (
-    <Button type="button" variant="secondary" onClick={backToList}>
-      Volver a la lista
-    </Button>
-  ) : canManage ? (
-    <>
-      <Button type="button" variant="secondary" onClick={() => setPdfOpen(true)}>
-        Cargar desde PDF
+  const headerActions =
+    calendarId !== null ? (
+      <Button type="button" variant="secondary" onClick={backToList}>
+        Volver a la lista
       </Button>
-      <Button type="button" variant="primary" onClick={() => setNewOpen(true)}>
-        Nuevo calendario
-      </Button>
-    </>
-  ) : undefined;
+    ) : canManage ? (
+      <>
+        <Button type="button" variant="secondary" onClick={() => setPdfOpen(true)}>
+          Cargar desde PDF
+        </Button>
+        <Button type="button" variant="primary" onClick={() => setNewOpen(true)}>
+          Nuevo calendario
+        </Button>
+      </>
+    ) : undefined;
 
   return (
     <DensePage density={density} flow>
@@ -208,7 +238,9 @@ export function StudyCalendariosFiscales() {
               label="Año"
               className="dense-select"
               value={filters.year === null ? "" : String(filters.year)}
-              onChange={(value) => updateFilters({ ...filters, year: value === "" ? null : Number(value) })}
+              onChange={(value) =>
+                updateFilters({ ...filters, year: value === "" ? null : Number(value) })
+              }
               placeholder="Todos los años"
               options={yearOptions.map((year) => ({ value: String(year), label: String(year) }))}
             />
@@ -234,7 +266,9 @@ export function StudyCalendariosFiscales() {
               label="Estado"
               options={STATUS_OPTIONS}
               selected={statusSelection}
-              onChange={(next) => updateFilters({ ...filters, statuses: statusesFromGroup(next, statusSelection) })}
+              onChange={(next) =>
+                updateFilters({ ...filters, statuses: statusesFromGroup(next, statusSelection) })
+              }
             />
             {hasFilters ? (
               <Button type="button" variant="text" size="row" onClick={clearFilters}>
@@ -262,7 +296,9 @@ export function StudyCalendariosFiscales() {
               onRetry={() => void list.refetch()}
             />
           ) : null}
-          {list.data && list.isFetching ? <p>Actualizando la lista: se muestran los datos anteriores.</p> : null}
+          {list.data && list.isFetching ? (
+            <p>Actualizando la lista: se muestran los datos anteriores.</p>
+          ) : null}
           {list.data && rows.length === 0 ? (
             hasFilters ? (
               <EmptyState
@@ -396,7 +432,9 @@ function listaCon(items: readonly string[]): string {
 
 /** Motivo junto a «Crear calendario» mientras no se puede enviar: qué falta, o qué corregir. */
 function motivoDeAlta(form: CalendarForm, issues: Record<string, string>): string | null {
-  const vacios = EMPTY_FIELD_LABELS.filter(([key]) => form[key].trim() === "").map(([, label]) => label);
+  const vacios = EMPTY_FIELD_LABELS.filter(([key]) => form[key].trim() === "").map(
+    ([, label]) => label,
+  );
   if (vacios.length > 0) return `Completá ${listaCon(vacios)}.`;
   const primero = NEW_FIELD_ORDER.find((key) => issues[key] !== undefined);
   return primero !== undefined ? `Revisá ${INVALID_FIELD_LABELS[primero]}.` : null;
@@ -436,7 +474,8 @@ function NuevoCalendarioPanel({
   };
 
   const create = useMutation({
-    mutationFn: () => api.post<CalendarDetail>(`/firms/${firmId}/tax-calendars`, calendarPayload(form)),
+    mutationFn: () =>
+      api.post<CalendarDetail>(`/firms/${firmId}/tax-calendars`, calendarPayload(form)),
     onSuccess: (calendar) => {
       void queryClient.invalidateQueries({ queryKey: ["tax-calendars", firmId] });
       notify.success(`Calendario creado: versión ${calendar.version} en borrador.`);
@@ -484,7 +523,12 @@ function NuevoCalendarioPanel({
         />
       }
     >
-      <form id="nuevo-calendario-form" className="study-form study-form--alinear-arriba" noValidate onSubmit={onSubmit}>
+      <form
+        id="nuevo-calendario-form"
+        className="study-form study-form--alinear-arriba"
+        noValidate
+        onSubmit={onSubmit}
+      >
         {serverNotice ? <Notice tone="error">{serverNotice}</Notice> : null}
         {authorities.isError ? (
           <AsyncState
@@ -498,6 +542,7 @@ function NuevoCalendarioPanel({
         ) : null}
         <CalendarioFiscalSelect
           id={NEW_FIELD_IDS.taxAuthorityId ?? "cal-organismo"}
+          required
           label="Organismo"
           value={form.taxAuthorityId}
           placeholder="Elegí el organismo"
@@ -517,6 +562,7 @@ function NuevoCalendarioPanel({
         ) : null}
         <CalendarioFiscalSelect
           id={NEW_FIELD_IDS.jurisdictionId ?? "cal-jurisdiccion"}
+          required
           label="Jurisdicción"
           value={form.jurisdictionId}
           placeholder="Elegí la jurisdicción"
@@ -526,8 +572,9 @@ function NuevoCalendarioPanel({
         />
         <Field
           id={NEW_FIELD_IDS.year ?? "cal-anio"}
+          required
           name="year"
-          label="Año"
+          label="Año *"
           className="calendario-anio"
           hint="Entre 2000 y 2100."
           inputMode="numeric"
@@ -538,8 +585,9 @@ function NuevoCalendarioPanel({
         />
         <Field
           id={NEW_FIELD_IDS.title ?? "cal-titulo"}
+          required
           name="title"
-          label="Título"
+          label="Título *"
           hint="Cómo se llama en el PDF, por ejemplo «Calendario nacional 2026»."
           value={form.title}
           onChange={(event) => change("title", event.target.value)}

@@ -38,7 +38,7 @@ export interface DenseTab<T extends string> {
   count?: number;
   warnCount?: number;
   description?: string;
-  status?: string;
+  status?: ReactNode;
 }
 
 export function DenseTabs<T extends string>({
@@ -75,7 +75,7 @@ export function DenseTabs<T extends string>({
             role="tab"
             aria-selected={active === tab.id}
             aria-controls={`${idPrefix}-panel`}
-            aria-description={tab.description ?? tab.status}
+            aria-description={tab.description ?? (typeof tab.status === "string" ? tab.status : undefined)}
             tabIndex={active === tab.id ? 0 : -1}
             className="dense-tab"
             onClick={() => onChange(tab.id)}
@@ -92,7 +92,22 @@ export function DenseTabs<T extends string>({
               </span>
             ) : null}
           </Button>
-          {tab.status ? <span className="dense-tab__status">{tab.status}</span> : null}
+          {tab.status ? (
+            <span className="dense-tab__status">
+              {(() => {
+                // «! Con pendientes»: el símbolo queda separado del texto, que puede estilarse como el resto de la pestaña.
+                const partes = typeof tab.status === "string" ? /^([!✓·])\s+(.+)$/.exec(tab.status) : null;
+                return partes ? (
+                  <>
+                    {partes[1]}
+                    <span className="dense-tab__status-texto"> {partes[2]}</span>
+                  </>
+                ) : (
+                  tab.status
+                );
+              })()}
+            </span>
+          ) : null}
         </span>
       ))}
     </div>

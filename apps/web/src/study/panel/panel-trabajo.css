@@ -40,7 +40,11 @@ table[aria-label="Panel de trabajo"] tbody td {
   align-items: stretch;
 }
 
-/* Dos filas fijas (1280 y 1440): cada fila ocupa el ancho de la barra. */
+/* Una fila con los cuatro filtros frecuentes; «Más filtros» agrega una segunda fila (06-3). */
+.panel-trabajo__fila[hidden] {
+  display: none;
+}
+
 .panel-trabajo__fila {
   display: flex;
   flex-wrap: nowrap;
@@ -49,22 +53,21 @@ table[aria-label="Panel de trabajo"] tbody td {
   inline-size: 100%;
 }
 
-/* Anchos fijos por filtro: entran el valor más largo sin cortar el nombre. */
+/* Los cuatro filtros frecuentes se reparten el ancho de la fila. */
 /* El filtro es un SearchSelect: el input queda dentro de su contenedor, por eso no es hijo directo. */
-.panel-trabajo__filtro--responsable .dense-select {
-  inline-size: calc(var(--ds-space-4) * 14.5);
-  max-inline-size: calc(var(--ds-space-4) * 14.5);
+.panel-trabajo__filtro--responsable,
+.panel-trabajo__filtro--impuesto,
+.panel-trabajo__filtro--estado,
+.panel-trabajo__filtro--periodo {
+  flex: 1 1 0;
+  min-inline-size: 0;
 }
 
-.panel-trabajo__filtro--impuesto .dense-select {
-  inline-size: calc(var(--ds-space-4) * 14);
-  max-inline-size: calc(var(--ds-space-4) * 14);
-}
-
+.panel-trabajo__filtro--responsable .dense-select,
+.panel-trabajo__filtro--impuesto .dense-select,
 .panel-trabajo__filtro--estado .dense-select,
 .panel-trabajo__filtro--periodo .dense-select {
-  inline-size: calc(var(--ds-space-4) * 16);
-  max-inline-size: calc(var(--ds-space-4) * 16);
+  inline-size: 100%;
 }
 
 .panel-trabajo__filtro .ds-field__input {

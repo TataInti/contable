@@ -181,6 +181,8 @@ describe("Panel de trabajo: pantalla", () => {
   it("filtra por terminación de CUIT con el selector de dígitos", async () => {
     renderPanel();
     await tablaPanel();
+    // 06-3: la terminación vive en «Más filtros».
+    fireEvent.click(screen.getByRole("button", { name: "Más filtros" }));
     fireEvent.click(screen.getByRole("button", { name: "1" }));
     await waitFor(() => expect(ubicacion()).toContain("terminacion=1"));
     expect(ultimaRuta()).toContain("terminacion=1");
@@ -384,7 +386,7 @@ describe("Panel de trabajo: pantalla", () => {
     expect(screen.queryByText(/^Sobre /)).toBeNull();
   });
 
-  it("la barra tiene dos filas, cada control queda en su par y el nombre va dentro del control (hallazgos 63 y 81)", async () => {
+  it("la barra tiene una fila con los cuatro filtros frecuentes; terminación y fechas van en «Más filtros» (06-3, hallazgos 63 y 81)", async () => {
     renderPanel("/panel-trabajo?estado=DJ_PENDIENTE");
     await tablaPanel();
     const filas = document.querySelectorAll<HTMLElement>(".dense-toolbar .panel-trabajo__fila");
@@ -392,13 +394,17 @@ describe("Panel de trabajo: pantalla", () => {
     const primera = filas[0] as HTMLElement;
     const segunda = filas[1] as HTMLElement;
     expect(within(primera).getByRole("combobox", { name: "Responsable" })).toBeTruthy();
-    expect(within(primera).getByRole("group", { name: "Terminación de CUIT" })).toBeTruthy();
     expect(within(primera).getByRole("combobox", { name: "Impuesto" })).toBeTruthy();
-    expect(within(segunda).getByRole("combobox", { name: "Estado" })).toBeTruthy();
-    expect(within(segunda).getByRole("combobox", { name: "Período fiscal" })).toBeTruthy();
+    expect(within(primera).getByRole("combobox", { name: "Estado" })).toBeTruthy();
+    expect(within(primera).getByRole("combobox", { name: "Período fiscal" })).toBeTruthy();
+    expect(within(primera).getByRole("button", { name: "Quitar filtros" })).toBeTruthy();
+    // La segunda fila está plegada hasta abrir «Más filtros».
+    expect(segunda.hidden).toBe(true);
+    fireEvent.click(within(primera).getByRole("button", { name: "Más filtros" }));
+    expect(segunda.hidden).toBe(false);
+    expect(within(segunda).getByRole("group", { name: "Terminación de CUIT" })).toBeTruthy();
     expect(within(segunda).getByLabelText("Vencimiento desde")).toBeTruthy();
     expect(within(segunda).getByLabelText("Vencimiento hasta")).toBeTruthy();
-    expect(within(segunda).getByRole("button", { name: "Quitar filtros" })).toBeTruthy();
     expect(textoElegido("Estado")).toBe("Estado: DJ pendiente");
     expect(screen.queryByRole("button", { name: "Quitar el filtro Mis obligaciones" })).toBeNull();
   });

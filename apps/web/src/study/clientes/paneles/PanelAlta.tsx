@@ -1,6 +1,7 @@
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
 import { Button, EmptyState, Field, Notice, SearchSelect } from "@contable/design-system";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
+import { formatCuitParcial } from "../../../lib/cuit";
 import { sinRespuesta } from "../consultas";
 import { ApiError, type Client } from "../../../lib/api";
 import {
@@ -106,13 +107,12 @@ export function PanelAlta({
         <Field
           id="client-cuit"
           label="CUIT"
-          value={form.cuit}
+          value={formatCuitParcial(form.cuit)}
           onChange={(event) =>
             setForm({ ...form, cuit: event.target.value.replace(/\D/g, "").slice(0, 11) })
           }
           inputMode="numeric"
-          pattern="[0-9]{11}"
-          hint="11 dígitos, sin guiones"
+          hint="11 dígitos; los guiones se agregan solos"
           required
         />
         <SearchSelect

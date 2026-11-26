@@ -361,6 +361,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
       // Las diferencias informan y no bloquean; el cajón sigue abierto con el pago a mano.
       await expect(drawer.getByLabel("Importe", { exact: true })).toHaveValue(total, { timeout: 30_000 });
       await drawer.getByLabel("Fecha de pago").fill("2026-11-20");
+      await drawer.getByLabel("Registrar también el pago al guardar").check();
       await mutating(page, "/payments", () => drawer.getByRole("button", { name: "Registrar pago", exact: true }).click());
       await expect(drawer).toBeHidden({ timeout: 60_000 });
     }

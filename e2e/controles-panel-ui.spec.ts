@@ -157,7 +157,8 @@ test("cola de Controles: resolver desde el Legajo y revisar Actividad en el pane
     const firstDrawer = page.getByRole("dialog");
     await expect(page).toHaveURL(/panel=control-/);
     await expect(firstDrawer.getByRole("button", { name: /Confirmar/ })).toHaveCount(0);
-    await expect(firstDrawer.getByRole("heading", { name: "Facturas C", exact: true })).toHaveCSS("white-space", "nowrap");
+    // El título largo del cajón hace salto de línea en vez de cortarse con «…».
+    await expect(firstDrawer.getByRole("heading", { name: "Facturas C", exact: true })).toHaveCSS("white-space", "normal");
     await expect(firstDrawer.getByText("Estado: Bloqueante · Bloquea el cierre")).toBeVisible();
     await expect(firstDrawer.getByRole("list", { name: "Comprobantes afectados" })).toBeVisible();
     await expect(firstDrawer.getByText("C · 0001-00000001")).toBeVisible();

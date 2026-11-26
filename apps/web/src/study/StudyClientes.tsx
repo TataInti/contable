@@ -580,7 +580,7 @@ export function StudyClientes() {
             key: "active",
             label: "Activos",
             value: query.data ? activeCount : "—",
-            detail: query.data ? `${clients.length - activeCount} inactivos` : undefined,
+            detail: query.data ? `${clients.length - activeCount} ${clients.length - activeCount === 1 ? "inactivo" : "inactivos"}` : undefined,
           },
           {
             key: "incomplete",
