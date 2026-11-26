@@ -39,6 +39,22 @@
   gap: var(--ds-space-1) var(--ds-space-2);
   align-items: end;
 }
+/* El botón de mover lleva el nombre del cliente destino: puede ocupar varias líneas sin salirse del panel. */
+.cuit-control__mover .ds-button {
+  max-width: 100%;
+  height: auto;
+  min-height: var(--ds-control-height-md);
+  white-space: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.cuit-control-bloque .cuit-control__motivo {
+  grid-template-columns: minmax(0, 1fr);
+}
+.cuit-control__motivo input {
+  width: 100%;
+  min-width: 0;
+}
 .cuit-control__motivo > label,
 .cuit-control__motivo > .form-error {
   grid-column: 1 / -1;
