@@ -2,7 +2,7 @@ import { Button } from "@contable/design-system";
 import type { DenseColumn } from "../../ui/Dense";
 import { formatCuit } from "../../lib/cuit";
 import { StatusBadge } from "../../ui/StatusBadge";
-import { MONTH_SHORT, configurationGaps, vatLabel } from "./etiquetas";
+import { configurationGaps, vatLabel, vatShort } from "./etiquetas";
 import type { ClientWithProfile } from "./tipos";
 
 interface ColumnasCarteraProps {
@@ -24,7 +24,7 @@ export function columnasCartera({
     {
       key: "legalName",
       header: "Cliente",
-      width: inspectorOpen ? "24%" : "18%",
+      width: inspectorOpen ? "40%" : "30%",
       className: "client-list__client-column",
       sortValue: (row) => row.legalName.toLocaleLowerCase("es-AR"),
       render: (row) => (
@@ -56,77 +56,44 @@ export function columnasCartera({
     {
       key: "cuit",
       header: "CUIT",
-      width: "11%",
+      width: "14%",
       className: "client-list__cuit-column",
+      secondary: true,
       sortValue: (row) => row.cuit,
-      render: (row) => <span className="tabular-copy">{formatCuit(row.cuit)}</span>,
-    },
-    {
-      key: "cuitEnding",
-      header: "Terminación de CUIT",
-      width: "10%",
-      className: "client-list__ending-column",
-      sortValue: (row) => (row.cuitEnding == null ? 10 : Number(row.cuitEnding)),
       render: (row) =>
-        row.cuitEnding == null ? (
+        !row.cuit ? (
           <span className="dense-dim">Sin CUIT</span>
         ) : (
-          <span className="tabular-copy">{row.cuitEnding}</span>
+          <span className="tabular-copy">{formatCuit(row.cuit)}</span>
         ),
     },
     {
       key: "vat",
       header: "Condición IVA",
-      width: inspectorOpen ? "12%" : "10%",
+      width: "13%",
       className: "client-list__vat-column",
+      secondary: true,
       sortValue: (row) => vatLabel(row.profile?.vatCondition),
-      render: (row) => vatLabel(row.profile?.vatCondition) || <span className="dense-dim">—</span>,
+      render: (row) =>
+        row.profile?.vatCondition ? (
+          <span title={vatLabel(row.profile.vatCondition)}>{vatShort(row.profile.vatCondition)}</span>
+        ) : (
+          <span className="dense-dim">—</span>
+        ),
     },
     {
       key: "province",
       header: "Provincia",
-      width: inspectorOpen ? "0%" : "5%",
+      width: "13%",
       className: "client-list__secondary-column",
       secondary: true,
       sortValue: (row) => row.profile?.province ?? "",
       render: (row) => row.profile?.province || <span className="dense-dim">—</span>,
     },
     {
-      key: "activity",
-      header: "Actividad",
-      width: inspectorOpen ? "0%" : "5%",
-      className: "client-list__secondary-column",
-      secondary: true,
-      sortValue: (row) => row.profile?.activity ?? "",
-      render: (row) => row.profile?.activity || <span className="dense-dim">—</span>,
-    },
-    {
-      key: "standard",
-      header: "Norma",
-      width: inspectorOpen ? "0%" : "4%",
-      className: "client-list__secondary-column",
-      secondary: true,
-      sortValue: (row) => row.profile?.accountingStandard ?? "",
-      render: (row) => row.profile?.accountingStandard || <span className="dense-dim">—</span>,
-    },
-    {
-      key: "closing",
-      header: "Cierre",
-      width: inspectorOpen ? "0%" : "4%",
-      className: "client-list__secondary-column",
-      secondary: true,
-      sortValue: (row) => row.profile?.fiscalYearEndMonth ?? 0,
-      render: (row) =>
-        row.profile?.fiscalYearEndMonth ? (
-          MONTH_SHORT[row.profile.fiscalYearEndMonth - 1]
-        ) : (
-          <span className="dense-dim">—</span>
-        ),
-    },
-    {
       key: "gaps",
       header: "Ficha",
-      width: inspectorOpen ? "16%" : "14%",
+      width: inspectorOpen ? "30%" : "18%",
       className: "client-list__profile-column",
       sortValue: (row) => configurationGaps(row).length,
       render: (row) => {
@@ -146,7 +113,7 @@ export function columnasCartera({
     {
       key: "status",
       header: "Cuenta",
-      width: inspectorOpen ? "16%" : "11%",
+      width: inspectorOpen ? "16%" : "12%",
       className: "client-list__status-column",
       sortValue: (row) => row.status,
       render: (row) => <StatusBadge status={row.status} />,
@@ -154,14 +121,14 @@ export function columnasCartera({
     {
       key: "open",
       header: "",
-      width: inspectorOpen ? "13%" : "9%",
+      width: inspectorOpen ? "14%" : "8%",
       className: "client-list__action-column",
       sticky: "right",
       align: "right",
       render: (row) => (
         <Button
           size="sm"
-          variant="secondary"
+          variant="ghost"
           aria-label={`Abrir ficha de ${row.legalName}`}
           onClick={(event) => {
             event.stopPropagation();

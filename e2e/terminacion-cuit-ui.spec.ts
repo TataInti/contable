@@ -121,8 +121,8 @@ for (const viewport of [
       expect(medidas.desbordeContenedor).toBeLessThanOrEqual(0);
       expect(medidas.tablaDentro).toBe(true);
 
-      // El encabezado «Terminación de CUIT» no se corta: ni en vertical ni en horizontal.
-      const recorteEncabezado = await page.locator("thead th.client-list__ending-column").evaluate((th) => {
+      // El encabezado de la columna de CUIT no se corta: ni en vertical ni en horizontal.
+      const recorteEncabezado = await page.locator("thead th.client-list__cuit-column").evaluate((th) => {
         const caja = th.getBoundingClientRect();
         const rango = document.createRange();
         rango.selectNodeContents(th);
@@ -135,13 +135,14 @@ for (const viewport of [
       expect(recorteEncabezado.verticalQueSobra).toBeLessThanOrEqual(1);
       expect(recorteEncabezado.horizontalQueSobra).toBe(false);
 
-      const digitos = page.getByRole("group", { name: "Terminación de CUIT" });
-      await digitos.getByRole("button", { name: "9" }).click();
+      // La terminación se elige en el desplegable de la barra de filtros (ya no hay botones por dígito).
+      const terminacion = page.getByRole("combobox", { name: "Terminación de CUIT" });
+      await terminacion.selectOption({ label: "Termina en 9" });
       await expect(page).toHaveURL(/terminacion=9/);
       await expect(filas(page)).toHaveCount(2);
       await capturar(page, `clientes-filtrado-${viewport.width}x${viewport.height}.png`);
 
-      await digitos.getByRole("button", { name: "9" }).click();
+      await terminacion.selectOption({ label: "Terminación: todas" });
       await expect(filas(page)).toHaveCount(6);
       await page.getByRole("button", { name: "Agrupar por terminación" }).click();
       await expect(page).toHaveURL(/agrupar=terminacion/);

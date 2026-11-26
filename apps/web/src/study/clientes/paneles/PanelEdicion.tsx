@@ -1,6 +1,6 @@
 import { useEffect, useRef, type FormEvent } from "react";
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query";
-import { Button, EmptyState, Field, Notice, SearchSelect } from "@contable/design-system";
+import { BarSelect, Button, EmptyState, Field, Notice, SearchSelect } from "@contable/design-system";
 import { ActionDrawer, ActionDrawerFooter } from "../../../ui/ActionDrawer";
 import { ApiError, type Client } from "../../../lib/api";
 import {
@@ -196,15 +196,12 @@ export function PanelEdicion({
           />
           <div className="ds-field">
             <span className="ds-field__label">Moneda funcional</span>
-            <SearchSelect
+            <BarSelect
               id="client-profile-currency"
               label="Moneda funcional"
-              hideLabel
-              className="ctxbar__input"
               value={profileForm.functionalCurrency}
-              onChange={(value) => setProfileForm({ ...profileForm, functionalCurrency: value })}
+              onChange={(event) => setProfileForm({ ...profileForm, functionalCurrency: event.target.value })}
               required
-              allowEmpty={false}
               options={[
                 ...BACKED_CURRENCIES.map((code) => ({ value: code, label: code })),
                 ...(currencyNotBacked ? [{ value: profileForm.functionalCurrency, label: `${profileForm.functionalCurrency} — fuera de catálogo` }] : []),
@@ -218,26 +215,13 @@ export function PanelEdicion({
           ) : null}
           <div className="ds-field">
             <span className="ds-field__label">Cierre de ejercicio</span>
-            <SearchSelect
-              hideLabel
+            <BarSelect
               label="Cierre de ejercicio"
-              className="ctxbar__input"
               value={String(profileForm.fiscalYearEndMonth)}
-              onChange={(value) => setProfileForm({ ...profileForm, fiscalYearEndMonth: value })}
-              allowEmpty={false}
+              onChange={(event) => setProfileForm({ ...profileForm, fiscalYearEndMonth: event.target.value })}
               options={[
-                "Enero",
-                "Febrero",
-                "Marzo",
-                "Abril",
-                "Mayo",
-                "Junio",
-                "Julio",
-                "Agosto",
-                "Septiembre",
-                "Octubre",
-                "Noviembre",
-                "Diciembre",
+                "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
               ].map((month, index) => ({ value: String(index + 1), label: month }))}
             />
           </div>
@@ -334,14 +318,14 @@ export function PanelEdicion({
                       onChange={(event) => toggleJurisdiction(entry.code, event.target.checked)}
                     />
                     <span>
-                      {entry.code} — {entry.name}
+                      {entry.name}
                     </span>
                   </label>
                 ))}
                 {catalogData?.filter((entry) => !entry.isActive && selectedJurisdictions.includes(entry.code)).map((entry) => (
                   <label key={entry.code} className="study-check-option">
                     <input type="checkbox" checked disabled />
-                    <span>{entry.code} — {entry.name} (oculto)</span>
+                    <span>{entry.name} (oculto)</span>
                   </label>
                 ))}
               </div>

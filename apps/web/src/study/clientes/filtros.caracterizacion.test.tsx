@@ -74,9 +74,8 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
     expect(filasClave()).toEqual(["c2", "c4"]);
-    expect(screen.getByRole("button", { name: "1" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "9" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByRole("button", { name: "0" }).getAttribute("aria-pressed")).toBe("false");
+    // La terminación es un desplegable: con varios dígitos desde la URL muestra la opción «Terminaciones 1, 9».
+    expect((screen.getByLabelText("Terminación de CUIT") as HTMLSelectElement).value).toBe("1,9");
   });
 
   it("un filtro de terminación sin dígitos válidos no filtra la cartera", async () => {
@@ -96,7 +95,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
   it("la búsqueda encuentra por razón social, nombre de fantasía y dígitos del CUIT, ignorando guiones", async () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
-    const buscar = screen.getByPlaceholderText("Buscar por nombre o CUIT…");
+    const buscar = screen.getByPlaceholderText("Buscar nombre o CUIT");
 
     cambiarValor(buscar, "BETA COM");
     await waitFor(() => expect(filasClave()).toEqual(["c2"]));
@@ -122,7 +121,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
     expect(filasClave()).toEqual(["c4"]);
 
-    cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "alfa");
+    cambiarValor(screen.getByPlaceholderText("Buscar nombre o CUIT"), "alfa");
     await screen.findByText("Ningún cliente coincide");
   });
 
@@ -155,7 +154,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
-    cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "zzz");
+    cambiarValor(screen.getByPlaceholderText("Buscar nombre o CUIT"), "zzz");
     cambiarValor(screen.getByLabelText("Filtrar por estado"), "INACTIVE");
     cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
@@ -165,7 +164,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
 
     await screen.findByRole("table", { name: "Cartera de clientes" });
     expect(filasClave()).toHaveLength(6);
-    expect((screen.getByPlaceholderText("Buscar por nombre o CUIT…") as HTMLInputElement).value).toBe("");
+    expect((screen.getByPlaceholderText("Buscar nombre o CUIT") as HTMLInputElement).value).toBe("");
     expect((screen.getByLabelText("Filtrar por estado") as HTMLSelectElement).value).toBe("");
     expect((screen.getByLabelText("Filtrar por condición IVA") as HTMLSelectElement).value).toBe("");
   });
@@ -181,13 +180,13 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
-    cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "alfa");
+    cambiarValor(screen.getByPlaceholderText("Buscar nombre o CUIT"), "alfa");
     cambiarValor(screen.getByLabelText("Filtrar por estado"), "INACTIVE");
     cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
     expect(parametrosUrl().toString()).toBe("");
 
-    fireEvent.click(screen.getByRole("button", { name: "9" }));
+    cambiarValor(screen.getByLabelText("Terminación de CUIT"), "9");
     await waitFor(() => expect(parametrosUrl().get("terminacion")).toBe("9"));
   });
 });
