@@ -112,7 +112,7 @@ export function SeccionPedidos({
                   header: "Acciones",
                   align: "right",
                   render: (row) => (
-                    <div className="table-actions">
+                    <div className="table-actions table-actions--ranuras">
                       {row.status === "DRAFT" && capabilities.has("request.manage") ? (
                         <Button
                           size="sm"
@@ -121,13 +121,17 @@ export function SeccionPedidos({
                         >
                           Enviar pedido
                         </Button>
-                      ) : null}
+                      ) : (
+                        <span aria-hidden="true" />
+                      )}
                       {capabilities.has("document.upload") &&
                       row.items.some((item) => item.status === "PENDING") ? (
                         <Button size="sm" variant="ghost" onClick={() => onSubir(row.id)}>
                           Subir
                         </Button>
-                      ) : null}
+                      ) : (
+                        <span aria-hidden="true" />
+                      )}
                       {capabilities.has("request.manage") ? (
                         <Button
                           size="sm"

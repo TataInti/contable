@@ -1,5 +1,5 @@
 import type { UseQueryResult } from "@tanstack/react-query";
-import { Button, EmptyState, Table } from "@contable/design-system";
+import { Button, Table } from "@contable/design-system";
 import { StatusBadge } from "../../ui/StatusBadge";
 import { formatearFecha } from "../../lib/formatoFechas";
 import type { ClientContextValue } from "../../context/ClientContext";
@@ -70,26 +70,17 @@ export function SeccionObligaciones({
             ]}
           />
         ) : (
-          <EmptyState
-            size="compact"
-            title={allPaid ? "Todo al día" : "Sin obligaciones materializadas"}
-            description={
-              allPaid
-                ? "Las obligaciones de este período están pagadas."
-                : "No hay vencimientos configurados para este contexto."
-            }
-            action={
-              capabilities.has("tax.profile.write") && !allPaid ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => navigate("/configuracion-fiscal")}
-                >
+          <p className="empty-line">
+            <span>{allPaid ? "Todo al día · las obligaciones de este período están pagadas" : "Sin vencimientos configurados"}</span>
+            {capabilities.has("tax.profile.write") && !allPaid ? (
+              <>
+                <span aria-hidden="true"> · </span>
+                <Button size="sm" variant="ghost" onClick={() => navigate("/configuracion-fiscal")}>
                   Configurar obligaciones
                 </Button>
-              ) : undefined
-            }
-          />
+              </>
+            ) : null}
+          </p>
         )}
       </section>
     </>

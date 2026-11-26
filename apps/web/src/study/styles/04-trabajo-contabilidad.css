@@ -281,3 +281,17 @@
   width: 100%;
   min-width: 0;
 }
+
+/* Pedidos documentales: «Enviar pedido», «Subir» y «Revisar» ocupan siempre la misma ranura, alineadas a la derecha entre filas. */
+#work-requests-section .ds-table th:last-child,
+#work-requests-section .ds-table td:last-child {
+  width: 19rem;
+  min-width: 19rem;
+}
+.study-trabajo .table-actions--ranuras {
+  display: grid;
+  grid-template-columns: 7.5rem 4rem 5rem;
+  justify-content: end;
+  justify-items: end;
+  gap: var(--ds-space-1);
+}

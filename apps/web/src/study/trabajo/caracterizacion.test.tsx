@@ -397,7 +397,7 @@ describe("K5 · error de una consulta", () => {
     renderTrabajo();
     // vigente: cambia con D7C-16 (el error de obligaciones se ve como vacío)
     expect(
-      await seccion("work-obligations-section").findByText("Sin obligaciones materializadas"),
+      await seccion("work-obligations-section").findByText("Sin vencimientos configurados"),
     ).toBeTruthy();
   });
 });
@@ -678,7 +678,7 @@ describe("K9 · próximas obligaciones", () => {
     responderApi({ obligaciones: [] });
     renderTrabajo();
     expect(
-      await seccion("work-obligations-section").findByText("Sin obligaciones materializadas"),
+      await seccion("work-obligations-section").findByText("Sin vencimientos configurados"),
     ).toBeTruthy();
     fireEvent.click(
       seccion("work-obligations-section").getByRole("button", { name: "Configurar obligaciones" }),
