@@ -136,7 +136,7 @@ function seleccionarItem(id: string) {
 async function abrirCajonDeCarga() {
   renderBandeja();
   fireEvent.click(await screen.findByRole("button", { name: "Subir documento" }));
-  return screen.findByRole("dialog", { name: "Nuevo documento" });
+  return screen.findByRole("dialog", { name: "Subir documento" });
 }
 
 async function abrirCajonConPedidos() {
@@ -322,7 +322,7 @@ describe("Caracterización K4 · subida: sesión, subida firmada y complete", ()
     await waitFor(() =>
       expect(llamadasA("/document-requests").length).toBeGreaterThan(pedidosAntes),
     );
-    expect(screen.getByRole("dialog", { name: "Nuevo documento" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Subir documento" })).toBeTruthy();
     expect(screen.getByText("Arrastrá un archivo o elegilo desde tu equipo")).toBeTruthy();
   });
 

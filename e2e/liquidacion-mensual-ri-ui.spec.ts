@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
+import { abrirInscripcionManual, RUN, SUFFIX, goTo, login, mutating, pickOption, seen, syntheticCuit } from "./helpers/ui";
 import { lineaPercepcionDgr, libroVentasXlsx, nombrePercepcionDgr } from "./helpers/fuentes-sinteticas";
 import { vincularActividades } from "./helpers/liquidacion-ui";
 
@@ -109,8 +109,8 @@ async function clickAdd(page: Page, heading: string) {
     .click();
 }
 
-/** Etiqueta de período como la muestra el desplegable del Legajo: «Octubre de 2026 · Impuesto · etiqueta». */
-const rotuloDelPeriodo = (tax: typeof IIBB | typeof TEM) => `${PERIODO.mes} · ${tax.taxName} · ${tax.label}`;
+/** Etiqueta del mes como la muestra el desplegable del Legajo: una entrada por mes, «Octubre de 2026». */
+const rotuloDelPeriodo = (_tax: typeof IIBB | typeof TEM) => PERIODO.mes;
 
 /** Lee un importe en la tabla o texto del Legajo; falla con el texto visible si no aparece. */
 async function esperarImporte(page: Page, texto: string) {
@@ -156,6 +156,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
   await test.step("Configuración fiscal: inscripción en IIBB Tucumán y TEM SMT (regímenes de sistema) desde el alta", async () => {
     for (const tax of [IIBB, TEM]) {
       await clickAdd(page, "Regímenes adheridos");
+      await abrirInscripcionManual(page);
       await pick(page.locator("#reg-regime"), tax.regime);
       await page.locator("#reg-from").fill(ALTA);
       await mutating(page, "/tax-registrations", () =>
@@ -274,7 +275,7 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await page.locator(".work-page").first().getByRole("button", { name: "Actualizar", exact: true }).first().click();
     await expect(page.getByText("Listo para calcular").first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/3 ventas asignadas automáticamente a la única actividad/).first()).toBeVisible();
-    await expect(page.getByText("Prov. RESTO-TUC · Mun. RESTO-SMT")).toHaveCount(3);
+    await expect(page.locator(".workpaper-classification-code", { hasText: /^Restaurante y bares \(Tucumán\)$/ })).toHaveCount(3);
     await expect(page.locator('[title*="Tucumán · RESTO-TUC · Restaurante y bares"][title*="San Miguel de Tucumán · RESTO-SMT"]')).toHaveCount(3);
     await expect(page.locator(".workpaper-classification-chip").getByText("auto")).toHaveCount(3);
     await expect(page.getByPlaceholder("Buscar actividad…")).toHaveCount(0);
@@ -334,47 +335,31 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
     await mutating(page, "/finalize", () => page.getByRole("button", { name: "Sí, finalizar" }).click());
     await expect(pasos.locator("li").nth(0).getByRole("status")).toHaveText("Hecho");
     await page.screenshot({ path: test.info().outputPath("r3-cierre.png"), fullPage: false });
-    await pasos.locator("li").nth(1).getByRole("button", { name: "Registrar presentación y acuse", exact: true }).click();
-    await page.screenshot({ path: test.info().outputPath("r3-cierre-paso-desplegado.png"), fullPage: false });
-    await page.getByRole("button", { name: "Cancelar", exact: true }).last().click();
+    await page.getByRole("button", { name: `Completar ${IIBB.taxName}` }).click();
+    await page.screenshot({ path: test.info().outputPath("r3-cierre-cajon-impuesto.png"), fullPage: false });
+    await page.getByRole("button", { name: "Cerrar", exact: true }).last().click();
   });
 
-  await test.step("Cálculo: presentación con acuse, declaración jurada y pago de IIBB y TEM", async () => {
-    await page.getByRole("tab", { name: /Cálculo/ }).click();
+  await test.step("Cierre: un cajón por impuesto con presentación con acuse, declaración jurada y pago de IIBB y TEM", async () => {
+    // Los importes llegan precargados desde el cálculo: se verifican y no se tipean.
     const cargas = [
-      { tax: IIBB, total: "9679.45", determinado: "11180.00" },
-      { tax: TEM, total: "10028.00", determinado: "10028.00" },
+      { tax: IIBB, total: "9.679,45", determinado: "11.180,00" },
+      { tax: TEM, total: "10.028,00", determinado: "10.028,00" },
     ];
     for (const { tax, total, determinado } of cargas) {
       const etiqueta = tax === IIBB ? "iibb" : "tem";
-      const fila = page.getByRole("row").filter({ hasText: tax.taxName });
       const drawer = page.locator(".action-drawer");
-
-      await fila.getByRole("button", { name: "Registrar presentación", exact: true }).click();
-      await drawer.getByLabel("Importe presentado").fill(total);
+      await page.getByRole("button", { name: `Completar ${tax.taxName}` }).click();
+      await expect(drawer.getByLabel("Importe presentado")).toHaveValue(total);
+      await expect(drawer.getByLabel("Impuesto determinado", { exact: true })).toHaveValue(determinado);
+      await expect(drawer.getByLabel("Total a pagar", { exact: true })).toHaveValue(total);
       await drawer.getByLabel("Archivo del acuse").setInputFiles(acuseSintetico(etiqueta));
-      await mutating(page, "/filings", () =>
-        drawer.getByRole("button", { name: "Registrar presentación", exact: true }).click(),
-      );
-      await expect(drawer).toBeHidden({ timeout: 60_000 });
-
-      await fila.getByRole("button", { name: /Cargar declaración jurada|Corregir declaración jurada/ }).click();
-      await drawer.getByLabel("Impuesto determinado", { exact: true }).fill(determinado);
-      await drawer.getByLabel("Saldo a favor técnico", { exact: true }).fill("0.00");
-      await drawer.getByLabel("Saldo a favor de libre disponibilidad", { exact: true }).fill("0.00");
-      await drawer.getByLabel("Total a pagar", { exact: true }).fill(total);
       await drawer.getByLabel("Archivo de la declaración jurada").setInputFiles(declaracionSintetica(etiqueta));
       await mutating(page, "/declaration", () =>
-        drawer.getByRole("button", { name: /Guardar declaración jurada|Guardar corrección/ }).click(),
+        drawer.getByRole("button", { name: "Guardar presentación y declaración jurada", exact: true }).click(),
       );
-      // Las diferencias informan y no bloquean: se leen y se cierra el cajón.
-      if (await drawer.getByText("Declaración jurada cargada con diferencias").isVisible().catch(() => false)) {
-        await drawer.getByRole("button", { name: "Cerrar", exact: true }).click();
-      }
-      await expect(drawer).toBeHidden({ timeout: 60_000 });
-
-      await fila.getByRole("button", { name: "Registrar pago", exact: true }).click();
-      await drawer.getByLabel("Importe", { exact: true }).fill(total);
+      // Las diferencias informan y no bloquean; el cajón sigue abierto con el pago a mano.
+      await expect(drawer.getByLabel("Importe", { exact: true })).toHaveValue(total, { timeout: 30_000 });
       await drawer.getByLabel("Fecha de pago").fill("2026-11-20");
       await mutating(page, "/payments", () => drawer.getByRole("button", { name: "Registrar pago", exact: true }).click());
       await expect(drawer).toBeHidden({ timeout: 60_000 });
@@ -382,7 +367,6 @@ test("liquidación mensual de un Responsable Inscripto en Tucumán, desde la int
   });
 
   await test.step("Cierre: los cuatro pasos quedan hechos y el saldo se informa para el mes siguiente", async () => {
-    await page.getByRole("tab", { name: /^Cierre/ }).click();
     const pasos = page.getByRole("list", { name: "Pasos para cerrar el período" });
     for (let i = 0; i < 4; i++) {
       await expect(pasos.locator("li").nth(i).getByRole("status")).toHaveText("Hecho");

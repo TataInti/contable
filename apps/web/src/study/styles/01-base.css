@@ -14,6 +14,13 @@
   align-items: center;
 }
 
+.study-route-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--ds-space-2);
+}
+
 .study-page__header {
   display: flex;
   align-items: flex-end;
@@ -183,6 +190,13 @@
   border: 0;
   border-radius: 0;
   background: transparent;
+}
+
+.client-create__address-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ds-space-4) var(--ds-space-5);
+  margin-top: var(--ds-space-4);
 }
 
 .client-create__hint {

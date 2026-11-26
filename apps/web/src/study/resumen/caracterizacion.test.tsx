@@ -435,7 +435,8 @@ describe("Caracterización · matriz §2.1 (13 filas): datos visibles con client
       montar({ datos });
       const resumenSeccion = await screen.findByRole("region", { name: "Resumen" });
       expect(resumenSeccion.querySelectorAll("dt")).toHaveLength(4);
-      expect(within(resumenSeccion).getAllByRole("button")).toHaveLength(3);
+      const accesos = resumenSeccion.querySelector(".client-summary__overview-links") as HTMLElement;
+      expect(within(accesos).getAllByRole("button")).toHaveLength(3);
     }
   });
 

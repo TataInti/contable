@@ -8,14 +8,12 @@ interface EtapaCierreProps {
   wp: Workpaper;
   periodLabel?: string;
   positions?: TaxPosition[];
-  inlineForm?: React.ReactNode | null;
   onFinalize?: () => void;
   onRectify?: () => void;
   onGoToCalculation?: () => void;
   onGoToControls?: () => void;
-  onPresentation?: () => void;
-  onDeclaration?: () => void;
-  onPayment?: () => void;
+  /** Abre el cajón del impuesto (presentación, declaración jurada y pago). */
+  onOpenTax?: (obligationId: string) => void;
   hasFiling?: boolean;
   hasDeclaration?: boolean;
   hasPayment?: boolean;
@@ -34,14 +32,11 @@ export function EtapaCierre({
   wp,
   periodLabel = "Período sin identificar",
   positions = [],
-  inlineForm = null,
   onFinalize,
   onRectify,
   onGoToCalculation,
   onGoToControls,
-  onPresentation,
-  onDeclaration,
-  onPayment,
+  onOpenTax,
   hasFiling = false,
   hasDeclaration = false,
   hasPayment = false,
@@ -68,13 +63,12 @@ export function EtapaCierre({
   const control = (label: string, allowed: boolean, handler?: () => void) => (
     <Button variant="secondary" onClick={handler} disabled={!allowed}>{label}</Button>
   );
-  const paso = (n: number, titulo: string, descripcion: string, hecho: boolean, disponible: boolean, accion: React.ReactNode, formulario?: React.ReactNode) => (
+  const paso = (n: number, titulo: string, descripcion: string, hecho: boolean, disponible: boolean, accion: React.ReactNode) => (
     <li className="workpaper-close-step" key={n}>
       <span className="workpaper-close-step__number">{n}</span>
       <div className="workpaper-close-step__title"><strong>{titulo}</strong><small>{descripcion}</small></div>
       <span className="workpaper-close-step__status" role="status">{hecho ? "Hecho" : disponible ? "Disponible" : "Bloqueado"}</span>
       <div className="workpaper-close-step__action">{accion}</div>
-      {formulario ? <div className="workpaper-close-step__inline">{formulario}</div> : null}
     </li>
   );
 
@@ -85,14 +79,50 @@ export function EtapaCierre({
         {paso(1, "Finalizar", "Congela la liquidación y genera los saldos de cierre.", finalized, readyToFinalize && canFinalize && !readOnly,
           readyToFinalize ? readOnly ? null : <>{control("Finalizar", canFinalize, onFinalize)}{canFinalize ? null : <p>Tu perfil no tiene permiso para finalizar este legajo.</p>}</> :
             !finalized ? <><p>{blocking.length ? "Falta resolver los controles bloqueantes." : "Falta revisar la liquidación."}</p><Button variant="secondary" onClick={blocking.length ? onGoToControls : onGoToCalculation}>{blocking.length ? "Ir a Controles" : "Ir a Cálculo"}</Button></> : null)}
-        {paso(2, "Registrar presentación y acuse", "Guardá la fecha, el número y el acuse emitido por el organismo.", hasFiling, finalized && canFile && !readOnly,
-          finalized ? readOnly ? null : <>{control("Registrar presentación y acuse", canFile, onPresentation)}{canFile ? null : <p>Tu perfil no tiene permiso para registrar la presentación.</p>}</> : <p>Falta finalizar la liquidación.</p>, inlineForm)}
-        {paso(3, "Cargar la declaración jurada", "Adjuntá la declaración y registrá los saldos que informa.", hasDeclaration, hasFiling && canDeclare && !readOnly,
-          hasFiling ? readOnly ? null : <>{control("Cargar la declaración jurada", canDeclare, onDeclaration)}{canDeclare ? null : <p>Tu perfil no tiene permiso para cargar la declaración jurada.</p>}</> : <p>Falta registrar la presentación y su acuse.</p>)}
+        {paso(2, "Presentación y acuse", "Fecha, importe y acuse emitido por el organismo, por impuesto.", hasFiling, finalized && canFile && !readOnly,
+          finalized ? <p>{hasFiling ? "Presentación registrada." : "Se registra en el cajón de cada impuesto."}</p> : <p>Falta finalizar la liquidación.</p>)}
+        {paso(3, "Declaración jurada", "Documento y saldos que informa, por impuesto.", hasDeclaration, hasFiling && canDeclare && !readOnly,
+          hasFiling ? <p>{hasDeclaration ? "Declaración jurada cargada." : "Se carga en el cajón de cada impuesto."}</p> : <p>Falta registrar la presentación y su acuse.</p>)}
         {paso(4, "Pago (opcional)", "Registrá el pago o indicá que no hubo importe a pagar.", hasPayment || paymentNotRequired, paymentNotRequired || (hasFiling && canPay && !readOnly),
           paymentNotRequired ? <p>{hasPayment ? `Pagado: ${formatMoney(totalPagado.toFixed(2))}.` : "No requiere pago: el saldo es cero o a favor."}</p> :
-            hasFiling ? readOnly ? null : <>{control("Registrar pago", canPay, onPayment)}{canPay ? null : <p>Tu perfil no tiene permiso para registrar el pago.</p>}</> : <p>Falta registrar la presentación.</p>)}
+            hasPayment ? <p>Pago registrado.</p> : hasFiling ? <p>Se registra en el cajón de cada impuesto.</p> : <p>Falta registrar la presentación.</p>)}
       </ol>
+      {finalized && positions.length > 0 ? (
+        <section aria-label="Impuestos del mes" className="workpaper-close-taxes">
+          <h3>Un cajón por impuesto</h3>
+          <ul className="workpaper-close-taxes__list">
+            {positions.map((position) => {
+              const presentada = Boolean(position.filingId);
+              const conDj = Boolean(position.hasDeclaration);
+              const pagado = Number(position.paid) > 0;
+              const sinPago = Number(position.totalPayable) <= 0;
+              const completo = presentada && conDj && (pagado || sinPago);
+              const nombre = position.regime.taxType.name;
+              const puede = canFile || canPay;
+              return (
+                <li key={position.obligationId} className="workpaper-close-tax">
+                  <div className="workpaper-close-tax__title">
+                    <strong>{nombre}</strong>
+                    <small>{position.regime.jurisdiction.name}</small>
+                  </div>
+                  <ul className="workpaper-close-tax__states" aria-label={`Estado de ${nombre}`}>
+                    <li>Presentación: <strong>{presentada ? "Hecha" : "Pendiente"}</strong></li>
+                    <li>Declaración jurada: <strong>{conDj ? "Cargada" : "Pendiente"}</strong></li>
+                    <li>Pago: <strong>{pagado && sinPago ? "Pagado" : sinPago ? "No requiere" : "Pendiente"}</strong></li>
+                  </ul>
+                  <div className="workpaper-close-tax__action">
+                    {readOnly ? null : puede ? (
+                      <Button variant={completo ? "secondary" : "primary"} aria-label={`${completo ? "Ver o corregir" : "Completar"} ${nombre}`} onClick={() => onOpenTax?.(position.obligationId)}>
+                        {completo ? "Ver o corregir" : "Completar"}
+                      </Button>
+                    ) : <p>Tu perfil no tiene permiso para registrar presentaciones ni pagos.</p>}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
       <section aria-label="Saldo para el mes siguiente">
         <h3>Saldo para el mes siguiente</h3>
         <p>{nextBalance !== null && nextBalance !== "" && Number.isFinite(Number(nextBalance)) ? formatMoney(nextBalance) : "El saldo se informa al cargar la declaración jurada."} · pasa a {nextPeriod}.</p>

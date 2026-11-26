@@ -37,6 +37,22 @@ const FEATURE_FLAG_LABELS: Record<string, string> = {
   TAX_MONOTRIBUTO: "Monotributo",
 };
 
+const FEATURE_FLAG_DESCRIPTIONS: Record<string, string> = {
+  DOCUMENTS: "Recibir y clasificar los comprobantes de los clientes.",
+  LEDGER: "Asientos, libro diario y plan de cuentas.",
+  BANKING: "Conciliar movimientos bancarios con la contabilidad.",
+  TAX: "Base de las liquidaciones de impuestos del estudio.",
+  REPORTING: "Informes y exportaciones por cliente y período.",
+  PORTAL: "Que los clientes consulten y suban su información.",
+  ASSISTANT: "Consultas en lenguaje natural sobre la información del cliente.",
+  BI: "Tableros de seguimiento del estudio y sus clientes.",
+  TAX_RI: "Liquidar IVA de clientes Responsables Inscriptos.",
+  TAX_IIBB_LOCAL_TUC: "Liquidar Ingresos Brutos de contribuyentes locales de Tucumán.",
+  TAX_TEM_SMT: "Liquidar la tasa municipal de San Miguel de Tucumán.",
+  TAX_CM_ART2: "Liquidar Ingresos Brutos por Convenio Multilateral.",
+  TAX_MONOTRIBUTO: "Seguir categorías y cuotas de Monotributo.",
+};
+
 export function StudyAdministracionPlataforma() {
   const [density] = useDensity();
   const [search, setSearch] = useState("");
@@ -156,7 +172,17 @@ export function StudyAdministracionPlataforma() {
                 {
                   key: "code",
                   header: "Módulo",
-                  render: (flag) => <><strong>{FEATURE_FLAG_LABELS[flag.code] ?? flag.code}</strong><br /><small>{flag.code}</small></>,
+                  render: (flag) => (
+                    <span title={`Código: ${flag.code}`}>
+                      <strong>{FEATURE_FLAG_LABELS[flag.code] ?? flag.code}</strong>
+                      {FEATURE_FLAG_DESCRIPTIONS[flag.code] ? (
+                        <>
+                          <br />
+                          <small>{FEATURE_FLAG_DESCRIPTIONS[flag.code]}</small>
+                        </>
+                      ) : null}
+                    </span>
+                  ),
                 },
                 {
                   key: "enabled",

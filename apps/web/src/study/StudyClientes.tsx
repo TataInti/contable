@@ -35,7 +35,7 @@ import { useCatalogosFicha } from "./clientes/useCatalogosFicha";
 import { InspectorCliente } from "./clientes/InspectorCliente";
 import { columnasCartera } from "./clientes/ColumnasCartera";
 import { FiltrosCartera, hasActiveFilters } from "./clientes/FiltrosCartera";
-import { profileGaps } from "./clientes/etiquetas";
+import { configurationGaps } from "./clientes/etiquetas";
 import { profileFormFrom } from "./clientes/tipos";
 import type {
   AccountingStandardCatalogEntry,
@@ -105,6 +105,7 @@ export function StudyClientes() {
     contactEmail: "",
     vatCondition: "",
     province: "",
+    fiscalAddress: "",
     activity: "",
     legalForm: "",
   });
@@ -177,6 +178,7 @@ export function StudyClientes() {
         ...(submittedForm.tradeName.trim() ? { tradeName: submittedForm.tradeName.trim() } : {}),
         ...(submittedForm.vatCondition ? { vatCondition: submittedForm.vatCondition } : {}),
         ...(submittedForm.province ? { province: submittedForm.province } : {}),
+        ...(submittedForm.fiscalAddress.trim() ? { fiscalAddress: submittedForm.fiscalAddress.trim() } : {}),
         ...(submittedForm.activity ? { activity: submittedForm.activity } : {}),
         ...(submittedForm.legalForm ? { legalForm: submittedForm.legalForm } : {}),
       }),
@@ -218,6 +220,7 @@ export function StudyClientes() {
         contactEmail: "",
         vatCondition: "",
         province: "",
+        fiscalAddress: "",
         activity: "",
         legalForm: "",
       });
@@ -339,7 +342,7 @@ export function StudyClientes() {
       if (statusFilter === "ACTIVE" && client.status !== "ACTIVE") return false;
       if (statusFilter === "INACTIVE" && client.status === "ACTIVE") return false;
       if (vatFilter && client.profile?.vatCondition !== vatFilter) return false;
-      if (onlyIncomplete && profileGaps(client).length === 0) return false;
+      if (onlyIncomplete && configurationGaps(client).length === 0) return false;
       if (endingFilter.length > 0 && (client.cuitEnding == null || !endingFilter.includes(client.cuitEnding))) return false;
       if (!needle) return true;
       return (
@@ -423,8 +426,7 @@ export function StudyClientes() {
   };
 
   const clients = query.data ?? [];
-  const missingProfileFields = (client: ClientWithProfile) => profileGaps(client);
-  const incompleteCount = clients.filter((client) => missingProfileFields(client).length > 0).length;
+  const incompleteCount = clients.filter((client) => configurationGaps(client).length > 0).length;
   const activeCount = clients.filter((client) => client.status === "ACTIVE").length;
   const selectedClient = selectedId ? (clients.find((client) => client.id === selectedId) ?? null) : null;
   const canManage = capabilities.has("client.manage");
@@ -463,10 +465,16 @@ export function StudyClientes() {
     }
   }, [contactClientId, query.data]);
 
-  const columns = columnasCartera({ inspectorOpen, clientId, openClientWorkspace, openClientSummary });
+  const openConfiguration = (id: string, step: string) => {
+    setClientId(id);
+    if (step === "ficha") { const client = clients.find((item) => item.id === id); if (client && canManage) startClientEdit(client); return; }
+    navigate(`/configuracion-fiscal?paso=${encodeURIComponent(step)}`);
+  };
+  const columns = columnasCartera({ inspectorOpen, clientId, openClientWorkspace, openClientSummary, openConfiguration });
 
   const inspector = selectedClient ? (
     <InspectorCliente
+      openConfiguration={openConfiguration}
       firmId={firmId}
       selectedClient={selectedClient}
       capabilities={capabilities}

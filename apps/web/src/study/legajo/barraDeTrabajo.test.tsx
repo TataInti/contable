@@ -220,7 +220,7 @@ describe("Legajo · barra de trabajo (Barra 2a)", () => {
     renderLegajo({ legajos: [legajoDemo("DRAFT")] });
     await within(barra()).findByRole("combobox", { name: "Período fiscal" });
     await waitFor(() => expect(valorElegido("Período fiscal")).toBe(periodoIibbDemo.id));
-    expect(within(abrirListado("Período fiscal")).getByRole("option", { name: "Seleccioná un período fiscal…" })).toBeTruthy();
+    expect(within(abrirListado("Período fiscal")).getByRole("option", { name: "Seleccioná un mes…" })).toBeTruthy();
     expect(
       await within(barra()).findByRole("button", { name: "Calcular liquidación" }),
     ).toBeTruthy();
@@ -372,21 +372,15 @@ describe("Legajo · sustitutas de la banda de cifras (BandaEstado.test.tsx, reti
 });
 
 describe("Legajo · correcciones de la barra (Barra 2c)", () => {
-  it("el período fiscal muestra el mes y el año primero, en cada opción y en el valor elegido", async () => {
+  it("el selector tiene una entrada por mes (sin impuesto ni etiqueta), en el valor elegido y en la lista", async () => {
     renderLegajo({ legajos: [legajoDemo("DRAFT")] });
     await within(barra()).findByRole("combobox", { name: "Período fiscal" });
-    expect(textoElegido("Período fiscal")).toBe(
-      "Octubre de 2026 · Ingresos Brutos · 2026-10",
-    );
+    expect(textoElegido("Período fiscal")).toBe("Octubre de 2026");
     expect(
       within(abrirListado("Período fiscal"))
         .getAllByRole("option")
         .map((opcion) => opcion.textContent),
-    ).toEqual([
-      "Seleccioná un período fiscal…",
-      "Octubre de 2026 · Ingresos Brutos · 2026-10",
-      "Octubre de 2026 · IVA · 2026-10",
-    ]);
+    ).toEqual(["Seleccioná un mes…", "Octubre de 2026"]);
   });
 
   it("«Crear rectificativa» tiene el tamaño de los demás controles de la barra (32 px)", async () => {

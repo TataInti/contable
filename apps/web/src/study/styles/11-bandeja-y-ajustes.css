@@ -830,6 +830,15 @@
   padding-inline: var(--ds-space-2) !important;
 }
 
+.client-list__gaps,
+.client-summary__overview-facts dd,
+.client-summary__overview-facts .ds-button--row {
+  max-inline-size: 100%;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.3;
+}
+
 @media (max-width: 1280px) {
   .dense-table[aria-label="Cartera de clientes"] .client-list__secondary-column {
     display: none;

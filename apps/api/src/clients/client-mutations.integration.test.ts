@@ -202,6 +202,7 @@ describe("Alta con perfil fiscal activo — integración API/PostgreSQL", () => 
           cuit,
           vatCondition: condition,
           province: "Tucumán",
+          fiscalAddress: "San Miguel de Tucumán, domicilio sintético",
         },
       });
       expect(response.statusCode).toBe(201);
@@ -215,6 +216,7 @@ describe("Alta con perfil fiscal activo — integración API/PostgreSQL", () => 
         personType,
         nationalCondition: condition,
         source: "ALTA_CLIENTE",
+        fiscalAddress: "San Miguel de Tucumán, domicilio sintético",
         createdByUserId: OWNER_A,
       });
       expect(profile.validFrom.toISOString().slice(0, 10)).toBe(
