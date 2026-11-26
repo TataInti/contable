@@ -50,7 +50,7 @@ export function FiltrosCartera({
         inputRef={searchRef}
         value={search}
         onChange={setSearch}
-        placeholder="Buscar por nombre o CUIT…"
+        placeholder="Buscar nombre o CUIT"
         label="Buscar clientes"
       />
       <BarSelect

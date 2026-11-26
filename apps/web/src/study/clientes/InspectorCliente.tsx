@@ -225,7 +225,7 @@ export function InspectorCliente({
             </div>
           ) : (
             <EmptyState
-              size="compact"
+              size="inline"
               title="Todavía no hay contactos"
               description="Agregá personas de referencia para este cliente."
             />

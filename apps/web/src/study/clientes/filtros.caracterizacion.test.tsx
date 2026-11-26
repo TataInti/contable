@@ -95,7 +95,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
   it("la búsqueda encuentra por razón social, nombre de fantasía y dígitos del CUIT, ignorando guiones", async () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
-    const buscar = screen.getByPlaceholderText("Buscar por nombre o CUIT…");
+    const buscar = screen.getByPlaceholderText("Buscar nombre o CUIT");
 
     cambiarValor(buscar, "BETA COM");
     await waitFor(() => expect(filasClave()).toEqual(["c2"]));
@@ -121,7 +121,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
     expect(filasClave()).toEqual(["c4"]);
 
-    cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "alfa");
+    cambiarValor(screen.getByPlaceholderText("Buscar nombre o CUIT"), "alfa");
     await screen.findByText("Ningún cliente coincide");
   });
 
@@ -154,7 +154,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
-    cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "zzz");
+    cambiarValor(screen.getByPlaceholderText("Buscar nombre o CUIT"), "zzz");
     cambiarValor(screen.getByLabelText("Filtrar por estado"), "INACTIVE");
     cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     fireEvent.click(cifraFiltro(/Ficha incompleta/));
@@ -164,7 +164,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
 
     await screen.findByRole("table", { name: "Cartera de clientes" });
     expect(filasClave()).toHaveLength(6);
-    expect((screen.getByPlaceholderText("Buscar por nombre o CUIT…") as HTMLInputElement).value).toBe("");
+    expect((screen.getByPlaceholderText("Buscar nombre o CUIT") as HTMLInputElement).value).toBe("");
     expect((screen.getByLabelText("Filtrar por estado") as HTMLSelectElement).value).toBe("");
     expect((screen.getByLabelText("Filtrar por condición IVA") as HTMLSelectElement).value).toBe("");
   });
@@ -180,7 +180,7 @@ describe("StudyClientes — filtros de la cartera (K1)", () => {
     renderConRutas("/clientes", <StudyClientes />);
     await screen.findByRole("table", { name: "Cartera de clientes" });
 
-    cambiarValor(screen.getByPlaceholderText("Buscar por nombre o CUIT…"), "alfa");
+    cambiarValor(screen.getByPlaceholderText("Buscar nombre o CUIT"), "alfa");
     cambiarValor(screen.getByLabelText("Filtrar por estado"), "INACTIVE");
     cambiarValor(screen.getByLabelText("Filtrar por condición IVA"), "RESPONSABLE_INSCRIPTO");
     fireEvent.click(cifraFiltro(/Ficha incompleta/));

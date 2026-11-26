@@ -1015,6 +1015,14 @@
 
 .client-contacts__anchor {
   scroll-margin-block: var(--ds-space-4);
+  /* Aire al final de la ficha para que el pie con los botones no tape el último bloque al desplazar. */
+  padding-block-end: var(--ds-space-4);
+}
+
+.client-list__status-column {
+  min-inline-size: 8.5rem;
+  overflow: visible;
+  padding-inline-end: var(--ds-space-3) !important;
 }
 
 @media (max-width: 1280px) {
