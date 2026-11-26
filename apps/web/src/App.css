@@ -12,6 +12,25 @@
   border-radius: 0;
 }
 
+/* Ícono, título y mensaje en una sola línea; el botón va a la derecha. */
+.ds-notice--banner .ds-notice__icon {
+  margin-block-start: 0;
+}
+
+.ds-notice--banner .ds-notice__content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--ds-space-3);
+  row-gap: var(--ds-space-1);
+}
+
+.ds-notice--banner .ds-notice__action {
+  margin-block-start: 0;
+  margin-inline-start: auto;
+}
+
 .app-loading {
   min-height: 100%;
   display: grid;
