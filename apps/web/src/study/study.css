@@ -44,3 +44,8 @@
   grid-column: 1 / -1;
   margin: 0;
 }
+
+/* Bandeja: la nota de campo dudoso va junto al valor, sin columnas de relleno. */
+.extraction-field-note {
+  color: var(--ds-color-text-muted);
+}
