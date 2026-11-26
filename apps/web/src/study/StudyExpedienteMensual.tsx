@@ -1032,7 +1032,7 @@ export function StudyExpedienteMensual() {
             onGoToControls={() => goToStep(4)}
             onFinalize={() => confirmar({
               title: "Finalizar el legajo",
-              description: "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
+              description: "Cierra el mes: ya no se podrá cambiar sin una rectificativa.",
               confirmLabel: "Sí, finalizar",
               onConfirm: () => finalizeMutation.mutate(wp.id),
             })}
@@ -1344,7 +1344,7 @@ export function StudyExpedienteMensual() {
             confirmar({
               title: "Finalizar el legajo",
               description:
-                "Finalizar congela los datos del período y genera los saldos de cierre para el siguiente. Después, el legajo no se modifica: para corregirlo hay que crear una rectificativa.",
+                "Cierra el mes: ya no se podrá cambiar sin una rectificativa.",
               confirmLabel: "Sí, finalizar",
               onConfirm: () => finalizeMutation.mutate(wp.id),
             })

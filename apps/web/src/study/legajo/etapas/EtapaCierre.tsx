@@ -67,29 +67,32 @@ export function EtapaCierre({
     <li className="workpaper-close-step" key={n}>
       <span className="workpaper-close-step__number">{n}</span>
       <div className="workpaper-close-step__title"><strong>{titulo}</strong><small>{descripcion}</small></div>
-      <span className="workpaper-close-step__status" role="status">{hecho ? "Hecho" : disponible ? "Disponible" : "Bloqueado"}</span>
+      <span className={`workpaper-close-step__status${hecho ? " workpaper-close-step__status--hecho" : ""}`} role="status">{hecho ? "Hecho" : disponible ? "Disponible" : "Bloqueado"}</span>
       <div className="workpaper-close-step__action">{accion}</div>
     </li>
   );
 
   return (
     <div className="workpaper-stage">
-      <p className="workpaper-close-summary"><strong>{periodLabel}</strong> · {positions.map((position) => position.regime.taxType.name).filter((name, index, all) => all.indexOf(name) === index).join(" / ") || "Impuestos sin posición"} · Total determinado {formatMoney(totalDeterminado.toFixed(2))} · Pagado {formatMoney(totalPagado.toFixed(2))} · Saldo {formatMoney(saldoPendiente.toFixed(2))} · Vence {formatearFecha(vence, "sin fecha cargada")} · {pasosHechos} de 4 pasos</p>
+      <p className="workpaper-close-summary">
+        <span><strong>{periodLabel}</strong> · {positions.map((position) => position.regime.taxType.name).filter((name, index, all) => all.indexOf(name) === index).join(" / ") || "Impuestos sin posición"} · Vence {formatearFecha(vence, "sin fecha cargada")} · {pasosHechos} de 4 pasos</span>
+        <span className="workpaper-close-summary__cifras">Total determinado {formatMoney(totalDeterminado.toFixed(2))} · Pagado {formatMoney(totalPagado.toFixed(2))} · Saldo {formatMoney(saldoPendiente.toFixed(2))}</span>
+      </p>
       <ol className="workpaper-close-checklist" aria-label="Pasos para cerrar el período">
-        {paso(1, "Finalizar", "Congela la liquidación y genera los saldos de cierre.", finalized, readyToFinalize && canFinalize && !readOnly,
+        {paso(1, "Finalizar", "Cierra la liquidación y deja los saldos para el mes siguiente.", finalized, readyToFinalize && canFinalize && !readOnly,
           readyToFinalize ? readOnly ? null : <>{control("Finalizar", canFinalize, onFinalize)}{canFinalize ? null : <p>Tu perfil no tiene permiso para finalizar este legajo.</p>}</> :
             !finalized ? <><p>{blocking.length ? "Falta resolver los controles bloqueantes." : "Falta revisar la liquidación."}</p><Button variant="secondary" onClick={blocking.length ? onGoToControls : onGoToCalculation}>{blocking.length ? "Ir a Controles" : "Ir a Cálculo"}</Button></> : null)}
         {paso(2, "Presentación y acuse", "Fecha, importe y acuse emitido por el organismo, por impuesto.", hasFiling, finalized && canFile && !readOnly,
-          finalized ? <p>{hasFiling ? "Presentación registrada." : "Se registra en el cajón de cada impuesto."}</p> : <p>Falta finalizar la liquidación.</p>)}
+          finalized ? (hasFiling ? null : <p>Se registra en cada impuesto, más abajo.</p>) : <p>Falta finalizar la liquidación.</p>)}
         {paso(3, "Declaración jurada", "Documento y saldos que informa, por impuesto.", hasDeclaration, hasFiling && canDeclare && !readOnly,
-          hasFiling ? <p>{hasDeclaration ? "Declaración jurada cargada." : "Se carga en el cajón de cada impuesto."}</p> : <p>Falta registrar la presentación y su acuse.</p>)}
+          hasFiling ? (hasDeclaration ? null : <p>Se carga en cada impuesto, más abajo.</p>) : <p>Falta registrar la presentación y su acuse.</p>)}
         {paso(4, "Pago (opcional)", "Registrá el pago o indicá que no hubo importe a pagar.", hasPayment || paymentNotRequired, paymentNotRequired || (hasFiling && canPay && !readOnly),
           paymentNotRequired ? <p>{hasPayment ? `Pagado: ${formatMoney(totalPagado.toFixed(2))}.` : "No requiere pago: el saldo es cero o a favor."}</p> :
-            hasPayment ? <p>Pago registrado.</p> : hasFiling ? <p>Se registra en el cajón de cada impuesto.</p> : <p>Falta registrar la presentación.</p>)}
+            hasPayment ? null : hasFiling ? <p>Se registra en cada impuesto, más abajo.</p> : <p>Falta registrar la presentación.</p>)}
       </ol>
       {finalized && positions.length > 0 ? (
         <section aria-label="Impuestos del mes" className="workpaper-close-taxes">
-          <h3>Un cajón por impuesto</h3>
+          <h3>Impuestos del mes</h3>
           <ul className="workpaper-close-taxes__list">
             {positions.map((position) => {
               const presentada = Boolean(position.filingId);
